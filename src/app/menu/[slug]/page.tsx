@@ -69,14 +69,11 @@ function MakeMenuLogo() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-        <path d="M3 2v7c0 1.1.9 2 2 2h2v11h2V11h2a2 2 0 002-2V2h-2v5H7V2H5v5H3V2z" fill="#E8192C" />
-        <path d="M19 2c-1.66 0-3 1.57-3 3.5V11h2v11h2V2h-1z" fill="#E8192C" />
       </svg>
       <span style={{
         fontFamily: "Georgia, serif", fontSize: 16, fontWeight: 700,
         color: "#E8192C", letterSpacing: "-0.3px",
       }}>
-        MakeMenu
       </span>
     </div>
   )
