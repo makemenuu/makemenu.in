@@ -44,9 +44,14 @@ export default function StepItem({
     >
 
       {/* IMAGE */}
-      <div className="w-full max-w-[350px] md:max-w-[450px] h-[220px] md:h-[280px] bg-gray-100 rounded-xl flex items-center justify-center shadow-sm hover:scale-105 transition duration-300">
-        <span className="text-gray-400">Image</span>
-      </div>
+<div className="w-full max-w-[350px] md:max-w-[450px] h-[220px] md:h-[280px] bg-gray-100 rounded-xl overflow-hidden shadow-sm hover:scale-105 transition duration-300">
+  <img
+    src={`/step${number}.jpeg`}
+    alt={title}
+    className="w-full h-full object-cover"
+  />
+</div>
+
 
       {/* TEXT */}
       <div className="max-w-md space-y-4 text-center md:text-left">
