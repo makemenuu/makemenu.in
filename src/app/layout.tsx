@@ -8,7 +8,7 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "MakeMenu – QR Code Ordering System for Restaurants",
   description:
     "Create digital menus and accept QR-based orders instantly. Perfect for restaurants, cafés, and food stalls.",
@@ -19,6 +19,11 @@ export const metadata = {
     "QR ordering",
     "contactless menu",
   ],
+  icons: {
+  icon: "/favicon.ico",
+  shortcut: "/favicon.ico",
+  apple: "/apple-touch-icon.png",
+ },
 };
 
 export default function RootLayout({
