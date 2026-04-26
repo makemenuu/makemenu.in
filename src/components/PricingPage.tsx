@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import React, { useState } from 'react';
 import type { PageId } from './types';
@@ -78,7 +78,7 @@ const faqs = [
   },
 ];
 
-const PricingPage = ({ onNavigate }) => {
+const PricingPage = () => {
   const router = useRouter()
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
