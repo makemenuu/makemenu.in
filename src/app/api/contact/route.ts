@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     await resend.emails.send({
       from: "MakeMenu Contact Form <onboarding@resend.dev>", // change after domain verified
       to: process.env.CONTACT_RECEIVER!,
-      reply_to: email,
+      replyTo: email,
       subject: `[MakeMenu] New message: ${subject || "General enquiry"}`,
       html: notificationHtml({ name, email, phone, subject, message }),
     });
