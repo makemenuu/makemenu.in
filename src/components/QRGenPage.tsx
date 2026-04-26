@@ -5,9 +5,7 @@ import { useRouter } from "next/navigation";
 import type { PageId } from "./types";
 import { sharedCSS } from "./styles";
 
-type QRGenPageProps = {
-  onNavigate: (page: PageId) => void;
-};
+
 
 function QRPattern({ seed, size = 140 }: { seed: number; size?: number }) {
   const cols = 9;
@@ -98,7 +96,7 @@ const qrFeatures = [
   },
 ];
 
-const QRGenPage: React.FC<QRGenPageProps> = ({ onNavigate }) => {
+const QRGenPage = () => {
   const router = useRouter();
 
   return (
