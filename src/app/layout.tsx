@@ -20,10 +20,10 @@ export const metadata: Metadata = {
     "contactless menu",
   ],
   icons: {
-  icon: "/favicon.ico",
-  shortcut: "/favicon.ico",
-  apple: "/apple-touch-icon.png",
- },
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({

@@ -1,0 +1,14 @@
+
+/* contact.css */
+.contact-field {
+  margin-bottom: 20px;
+}
+
+textarea {
+  resize: vertical;
+}
+
+select {
+  appearance: none;
+  cursor: pointer;
+} 

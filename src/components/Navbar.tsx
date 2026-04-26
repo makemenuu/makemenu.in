@@ -37,16 +37,12 @@ export default function Navbar() {
               Product
             </button>
 
-            <button
-              onClick={() =>
-                document
-                  .getElementById("pricing")
-                  ?.scrollIntoView({ behavior: "smooth" })
-              }
-              className="cursor-pointer hover:text-red-500 transition"
-            >
-              Pricing
-            </button>
+            <Link
+  href="/pricing"
+  className="cursor-pointer hover:text-red-500 transition"
+>
+  Pricing
+</Link>
 
           </div>
         </div>
@@ -98,17 +94,12 @@ export default function Navbar() {
               Product
             </button>
 
-            <button
-              onClick={() => {
-                setMenuOpen(false)
-                document
-                  .getElementById("pricing")
-                  ?.scrollIntoView({ behavior: "smooth" })
-              }}
-              className="text-left hover:text-red-500"
-            >
-              Pricing
-            </button>
+            <Link
+  href="/pricing"
+  className="cursor-pointer hover:text-red-500 transition"
+>
+  Pricing
+</Link>
 
             <Link
               href="/login"

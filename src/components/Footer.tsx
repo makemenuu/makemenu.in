@@ -1,6 +1,7 @@
 "use client"
 
 import { Instagram, Facebook } from "lucide-react"
+import Link from "next/link"
 
 export default function Footer() {
   return (
@@ -12,9 +13,30 @@ export default function Footer() {
         <div>
           <h3 className="font-bold text-lg md:text-xl mb-4">DISCOVER</h3>
           <ul className="space-y-2 text-gray-700">
-            <li className="hover:text-black cursor-pointer transition">QR Ordering</li>
-            <li className="hover:text-black cursor-pointer transition">Digital Menu</li>
-            <li className="hover:text-black cursor-pointer transition">Billing System</li>
+            <li className="hover:text-black cursor-pointer transition">
+              <Link
+    href="/qr-ordering"
+    className="hover:text-black transition"
+  >
+    QR Ordering
+  </Link>
+            </li>
+            <li className="hover:text-black cursor-pointer transition">
+              <Link
+    href="/digital-menu"
+    className="hover:text-black transition"
+  >
+    Digital Menu
+  </Link>
+            </li>
+            <li className="hover:text-black cursor-pointer transition">
+              <Link
+    href="/billing"
+    className="hover:text-black transition"
+  >
+    Billing System
+  </Link>
+            </li>
           </ul>
         </div>
 
@@ -22,9 +44,30 @@ export default function Footer() {
         <div>
           <h3 className="font-bold text-lg md:text-xl mb-4">FEATURES</h3>
           <ul className="space-y-2 text-gray-700">
-            <li className="hover:text-black cursor-pointer transition">Menu Setup</li>
-            <li className="hover:text-black cursor-pointer transition">Real-Time Orders</li>
-            <li className="hover:text-black cursor-pointer transition">QR Code Generator</li>
+            <li>
+  <Link
+    href="/menu-setup"
+    className="hover:text-black transition"
+  >
+    Menu Setup
+  </Link>
+</li>
+            <li>
+              <Link
+    href="/realtime-orders"
+    className="hover:text-black transition"
+  >
+    Real-Time Orders
+  </Link>
+            </li>
+            <li>
+              <Link
+    href="/qr-generator"
+    className="hover:text-black transition"
+  >
+  QR Code Generator
+  </Link>
+            </li>
           </ul>
         </div>
 
@@ -32,9 +75,39 @@ export default function Footer() {
         <div>
           <h3 className="font-bold text-lg md:text-xl mb-4">COMPANY</h3>
           <ul className="space-y-2 text-gray-700">
-            <li className="hover:text-black cursor-pointer transition">Pricing</li>
-            <li className="hover:text-black cursor-pointer transition">About</li>
-            <li className="hover:text-black cursor-pointer transition">Privacy</li>
+            <li className="hover:text-black cursor-pointer transition">
+                            <Link
+    href="/pricing"
+    className="hover:text-black transition"
+  >
+  Pricing
+  </Link>
+            </li>
+            <li className="hover:text-black cursor-pointer transition">
+              <Link
+    href="/contact"
+    className="hover:text-black transition"
+  >
+  Contact Us
+  </Link>
+            </li>
+            <li className="hover:text-black cursor-pointer transition">
+              <Link
+    href="/privacy"
+    className="hover:text-black transition"
+  >
+  Privacy Policy
+  </Link>
+            </li>
+            <li className="hover:text-black cursor-pointer transition">
+              <Link
+    href="/terms"
+    className="hover:text-black transition"
+  >
+  Terms & Conditions
+  </Link>
+            </li>
+
           </ul>
         </div>
 
