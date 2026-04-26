@@ -1,8 +1,7 @@
-"use client"
+"use client";
 
 
 import React, { useState, useEffect, useRef } from 'react';
-import type { PageId } from './types';
 import { sharedCSS } from './styles';
 import { useRouter } from "next/navigation"
 
@@ -239,7 +238,7 @@ const sections: Section[] = [
   },
 ];
 
-const PrivacyPage = ({ onNavigate }) => {
+const PrivacyPage = () => {
     const router = useRouter()
   const [activeSection, setActiveSection] = useState(sections[0].id);
   const [tocOpen, setTocOpen] = useState(false);
@@ -561,7 +560,7 @@ const PrivacyPage = ({ onNavigate }) => {
                 <button
                   className="btn-primary"
                   style={{ fontSize: '.78rem', padding: '8px 14px' }}
-                  onClick={() => onNavigate('contact')}
+                  onClick={() => router.push("/contact")}
                 >
                   Contact us
                 </button>
