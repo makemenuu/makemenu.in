@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import React from 'react';
 import { sharedCSS } from './styles';
@@ -18,7 +18,7 @@ const featureCards = [
   { icon: '🔴', title: 'Live availability', desc: 'Toggle items on or off in one tap. Sold-out items disappear from customer view immediately.' },
 ];
 
-const DigitalMenuPage = ({ onNavigate }) => {
+const DigitalMenuPage = () => {
   const router = useRouter(); // ✅ FIXED
 
   return (
