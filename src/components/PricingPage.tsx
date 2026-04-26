@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from 'react';
-import type { PageId } from './types';
 import { sharedCSS } from './styles';
 import { useRouter } from "next/navigation"
 
@@ -21,6 +20,7 @@ const plans: Plan[] = [
     name: 'Free Trial',
     monthlyPrice: 0,
     description: 'Give Makemenu a try in your shop—no commitments, no credit card required.',
+    cta: 'Start Free',
     ctaStyle: 'outline',
     highlighted: false,
     features: [
@@ -30,7 +30,6 @@ const plans: Plan[] = [
       'Real-time order dashboard',
       'Billing & receipt system',
       'Real-Time Analytics',
-
     ],
   },
   {
@@ -38,6 +37,8 @@ const plans: Plan[] = [
     tag: 'Most Popular',
     monthlyPrice: 399,
     description: 'For growing restaurants that need full QR ordering and live kitchen tools.',
+    cta: 'Upgrade Now',
+    ctaStyle: 'primary',
     highlighted: true,
     features: [
       'Unlimited menu items',

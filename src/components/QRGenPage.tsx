@@ -2,7 +2,6 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
-import type { PageId } from "./types";
 import { sharedCSS } from "./styles";
 
 

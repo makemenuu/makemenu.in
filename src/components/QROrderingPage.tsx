@@ -1,7 +1,6 @@
 "use client";
 
 import React from 'react';
-import type { PageId } from './types';
 import { sharedCSS } from './styles';
 import { useRouter } from "next/navigation"
 

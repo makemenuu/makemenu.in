@@ -513,7 +513,7 @@ const PrivacyPage = () => {
             <button
               className="btn-primary"
               style={{ fontSize: '.78rem', padding: '8px 14px' }}
-              onClick={() => onNavigate('contact')}
+              onClick={() => router.push("/contact")}
             >
               Contact us
             </button>

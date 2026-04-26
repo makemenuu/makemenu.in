@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from 'react';
-import type { PageId } from './types';
 import { sharedCSS } from './styles';
 import { useRouter } from "next/navigation"
 
@@ -46,7 +45,7 @@ const subjectOptions = [
   'Other',
 ];
 
-const ContactPage = ({ onNavigate }: { onNavigate?: (page: PageId) => void }) => {
+const ContactPage = () => {
   const router = useRouter();
 
   const [form, setForm] = useState<FormState>({
@@ -453,9 +452,9 @@ const ContactPage = ({ onNavigate }: { onNavigate?: (page: PageId) => void }) =>
           }}>
             <h4 style={{ fontWeight: 700, fontSize: '.95rem', marginBottom: 16 }}>Quick Links</h4>
             {[
-              { label: 'View pricing plans', page: 'pricing' as PageId, icon: '💳' },
-              { label: 'See all features', page: 'qr-ordering' as PageId, icon: '📱' },
-              { label: 'Privacy policy', page: 'privacy' as PageId, icon: '🔒' },
+              { label: 'View pricing plans', page: 'pricing' , icon: '💳' },
+              { label: 'See all features', page: 'qr-ordering' , icon: '📱' },
+              { label: 'Privacy policy', page: 'privacy', icon: '🔒' },
             ].map((link) => (
               <button
                 key={link.label}
