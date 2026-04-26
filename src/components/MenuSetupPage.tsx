@@ -6,9 +6,6 @@ import { useRouter } from "next/navigation";
 import type { PageId } from "@/types";
 import { sharedCSS } from "./styles";
 
-type MenuSetupPageProps = {
-  onNavigate: (page: PageId) => void;
-};
 
 const setupSteps = [
   {
@@ -82,7 +79,7 @@ const menuRows = [
   },
 ];
 
-const MenuSetupPage: React.FC<MenuSetupPageProps> = ({ onNavigate }) => {
+const MenuSetupPage = () => {
   const router = useRouter();
 
   return (
