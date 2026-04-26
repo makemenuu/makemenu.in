@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,18 +22,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Email to you
-    await transporter.sendMail({
-      from: `"MakeMenu Contact Form" <${process.env.GMAIL_USER}>`,
-      to: process.env.CONTACT_RECEIVER,
-      replyTo: email,
+    // Email to you (notification)
+    await resend.emails.send({
+      from: "MakeMenu Contact Form <onboarding@resend.dev>", // change after domain verified
+      to: process.env.CONTACT_RECEIVER!,
+      reply_to: email,
       subject: `[MakeMenu] New message: ${subject || "General enquiry"}`,
       html: notificationHtml({ name, email, phone, subject, message }),
     });
 
     // Auto-reply to customer
-    await transporter.sendMail({
-      from: `"MakeMenu Support" <${process.env.GMAIL_USER}>`,
+    await resend.emails.send({
+      from: "MakeMenu Support <onboarding@resend.dev>", // change after domain verified
       to: email,
       subject: `We received your message, ${name.trim().split(" ")[0]}! 👋`,
       html: autoReplyHtml({ name, email, subject }),
