@@ -26,8 +26,8 @@ const billingFeatures = [
   { icon: '📊', title: 'Daily reports', desc: 'End-of-day summaries, revenue breakdowns by category, and weekly trend charts built in.' },
 ];
 
-const BillingPage = ({ onNavigate }) => {
-    const router = useRouter();
+const BillingPage = () => {
+  const router = useRouter();
   return (
     <div className="page-enter" style={{ paddingTop: '64px' }}>
       <style>{sharedCSS}</style>
