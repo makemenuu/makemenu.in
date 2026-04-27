@@ -237,7 +237,12 @@ const fetchData = async () => {
     )
 }, [validOrders, filter, orderType, search])
 
-  const revenue = orders.reduce((sum, o) => sum + o.total_amount, 0)  
+  const completedOrders = validOrders.filter(o => o.status === "completed")
+
+const revenue = completedOrders.reduce(
+  (sum, o) => sum + o.total_amount,
+  0
+)
 
   if (loading) {
     return (
