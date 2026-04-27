@@ -19,29 +19,37 @@ export default function DashboardPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   // ================= FETCH =================
-  const fetchData = async () => {
-    setLoading(true)
+const fetchData = async () => {
+  setLoading(true)
 
-    const { data: orderData } = await supabase
-      .from("orders")
-.select(`
-  *,
-  qr_codes ( name )
-`)
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
+  const { data: orderData } = await supabase
+    .from("orders")
+    .select(`
+      *,
+      qr_codes ( name )
+    `)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
 
-    const orderIds = orderData?.map(o => o.id) || []
+  // ✅ FILTER TODAY HERE
+  const today = new Date().toISOString().split("T")[0]
 
-    const { data: itemData } = await supabase
-      .from("order_items")
-      .select("*")
-      .in("order_id", orderIds)
+  const todayOrders = (orderData || []).filter(order =>
+    order.created_at.startsWith(today)
+  )
 
-    setOrders(orderData || [])
-    setItems(itemData || [])
-    setLoading(false)
-  }
+  const orderIds = todayOrders.map(o => o.id)
+
+  const { data: itemData } = await supabase
+    .from("order_items")
+    .select("*")
+    .in("order_id", orderIds)
+
+  // ✅ IMPORTANT — SET FILTERED DATA
+  setOrders(todayOrders)
+  setItems(itemData || [])
+  setLoading(false)
+}
 
   useEffect(() => {
   const getUser = async () => {
@@ -229,9 +237,7 @@ export default function DashboardPage() {
     )
 }, [validOrders, filter, orderType, search])
 
-  const revenue = validOrders
-    .filter(o => o.status === "completed")
-    .reduce((sum, o) => sum + o.total_amount, 0)
+  const revenue = orders.reduce((sum, o) => sum + o.total_amount, 0)  
 
   if (loading) {
     return (
