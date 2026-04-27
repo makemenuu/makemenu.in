@@ -6,6 +6,7 @@ import Image from "next/image"
 import { supabase } from "../../lib/supabase"
 import { Eye, EyeOff } from "lucide-react"
 
+
 const districts = [
   "Chennai","Coimbatore","Madurai","Salem","Tiruchirappalli","Tirunelveli",
   "Erode","Vellore","Thoothukudi","Dindigul","Thanjavur","Ranipet",
@@ -24,6 +25,7 @@ export default function Signup() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
+  const [accepted, setAccepted] = useState(false)
 
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
@@ -46,12 +48,13 @@ export default function Signup() {
   const passwordsMatch = password === confirmPassword
 
   const isFormValid =
-    isValidName &&
-    isValidLocation &&
-    isValidPhone &&
-    isValidEmail &&
-    isValidPassword &&
-    passwordsMatch
+  isValidName &&
+  isValidLocation &&
+  isValidPhone &&
+  isValidEmail &&
+  isValidPassword &&
+  passwordsMatch &&
+  accepted
 
   const handleSignup = async () => {
     setError("")
@@ -176,6 +179,27 @@ export default function Signup() {
           setShow={setShowConfirm}
           valid={passwordsMatch}
         />
+
+        
+       <div className="mb-4 flex items-start gap-2">
+  <input
+    type="checkbox"
+    checked={accepted}
+    onChange={(e) => setAccepted(e.target.checked)}
+    className="mt-1 accent-[#f45b69]"
+  />
+
+  <p className="text-sm text-gray-600 leading-snug">
+    I agree to the{" "}
+    <Link href="/terms" className="text-black font-medium underline">
+      Terms & Conditions
+    </Link>{" "}
+    and{" "}
+    <Link href="/privacy" className="text-black font-medium underline">
+      Privacy Policy
+    </Link>
+  </p>
+</div>
 
         <button
           onClick={handleSignup}
