@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
     // Email to you (notification)
     await resend.emails.send({
-      from: "MakeMenu Contact Form <onboarding@resend.dev>", // change after domain verified
+      from: "MakeMenu Contact Form <noreply@makemenu.in>", // change after domain verified
       to: process.env.CONTACT_RECEIVER!,
       replyTo: email,
       subject: `[MakeMenu] New message: ${subject || "General enquiry"}`,
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
 
     // Auto-reply to customer
     await resend.emails.send({
-      from: "MakeMenu Support <onboarding@resend.dev>", // change after domain verified
+      from:"MakeMenu Support <noreply@makemenu.in>", // change after domain verified
       to: email,
       subject: `We received your message, ${name.trim().split(" ")[0]}! 👋`,
       html: autoReplyHtml({ name, email, subject }),
