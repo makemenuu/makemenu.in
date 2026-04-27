@@ -9,8 +9,6 @@ interface Plan {
   tag?: string;
   monthlyPrice: number | null;
   description: string;
-  cta: string;
-  ctaStyle: 'primary' | 'outline';
   highlighted: boolean;
   features: string[];
 }
@@ -20,7 +18,6 @@ const plans: Plan[] = [
     name: 'Free Trial',
     monthlyPrice: 0,
     description: 'Give Makemenu a try in your shop—no commitments, no credit card required.',
-    ctaStyle: 'outline',
     highlighted: false,
     features: [
       'Unlimited menu items',
@@ -286,15 +283,6 @@ const PricingPage = () => {
                 </li>
               ))}
             </ul>
-            {plan.ctaStyle === 'primary' ? (
-              <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
-                {plan.cta}
-              </button>
-            ) : (
-              <button className="btn-outline" style={{ width: '100%', justifyContent: 'center' }}>
-                {plan.cta}
-              </button>
-            )}
           </div>
         ))}
       </div>
