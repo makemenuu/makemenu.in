@@ -57,9 +57,7 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
             <path d="M2 7l4 4 6-7" stroke="#EF233C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
-
         {message}
-
         <button
           onClick={onClose}
           style={{
@@ -75,12 +73,189 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
   )
 }
 
+// ── Delete Confirmation Modal ──────────────────────────────────────────────────
+function DeleteConfirmModal({
+  qrName,
+  onConfirm,
+  onCancel,
+  isDeleting,
+}: {
+  qrName: string
+  onConfirm: () => void
+  onCancel: () => void
+  isDeleting: boolean
+}) {
+  return (
+    <>
+      <style>{`
+        @keyframes backdropIn {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+        @keyframes modalIn {
+          from { opacity: 0; transform: scale(0.95) translateY(8px); }
+          to   { opacity: 1; transform: scale(1) translateY(0); }
+        }
+      `}</style>
+
+      {/* Backdrop */}
+      <div
+        onClick={onCancel}
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.45)",
+          zIndex: 10000,
+          animation: "backdropIn 0.2s ease",
+        }}
+      />
+
+      {/* Modal */}
+      <div
+        style={{
+          position: "fixed",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          zIndex: 10001,
+          background: "#fff",
+          borderRadius: 16,
+          boxShadow: "0 24px 60px rgba(0,0,0,0.18)",
+          width: "90%",
+          maxWidth: 420,
+          padding: "28px 28px 24px",
+          fontFamily: "'DM Sans', -apple-system, sans-serif",
+          animation: "modalIn 0.22s ease",
+        }}
+      >
+        {/* Icon */}
+        <div style={{
+          width: 52, height: 52, borderRadius: "50%",
+          background: "#FFF1F2",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          marginBottom: 20,
+        }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"
+              stroke="#EF233C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            />
+            <path d="M10 11v6M14 11v6" stroke="#EF233C" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </div>
+
+        {/* Heading */}
+        <h3 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 700, color: "#111" }}>
+          Delete QR Code?
+        </h3>
+
+        {/* Body */}
+        <p style={{ margin: "0 0 16px", fontSize: 14, lineHeight: 1.6, color: "#555" }}>
+          You're about to delete{" "}
+          <span style={{ fontWeight: 700, color: "#111" }}>"{qrName}"</span>.
+        </p>
+
+        {/* Warning box */}
+        <div style={{
+          background: "#FFF8F0",
+          border: "1.5px solid #FDDCAE",
+          borderRadius: 10,
+          padding: "12px 14px",
+          display: "flex",
+          gap: 10,
+          alignItems: "flex-start",
+          marginBottom: 24,
+        }}>
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
+            <path
+              d="M10 2L1.5 17h17L10 2z"
+              stroke="#F59E0B" strokeWidth="1.8" strokeLinejoin="round"
+            />
+            <path d="M10 9v4" stroke="#F59E0B" strokeWidth="1.8" strokeLinecap="round" />
+            <circle cx="10" cy="14.5" r="0.75" fill="#F59E0B" />
+          </svg>
+          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "#92400E", fontWeight: 500 }}>
+            <strong>This will also permanently delete all orders</strong> placed through
+            this QR code. This action cannot be undone.
+          </p>
+        </div>
+
+        {/* Actions */}
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button
+            onClick={onCancel}
+            disabled={isDeleting}
+            style={{
+              padding: "10px 20px",
+              borderRadius: 8,
+              border: "1.5px solid #E5E7EB",
+              background: "#fff",
+              fontSize: 14,
+              fontWeight: 600,
+              color: "#374151",
+              cursor: "pointer",
+              transition: "background 0.15s",
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = "#F9FAFB")}
+            onMouseLeave={e => (e.currentTarget.style.background = "#fff")}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isDeleting}
+            style={{
+              padding: "10px 20px",
+              borderRadius: 8,
+              border: "none",
+              background: isDeleting ? "#F87171" : "#EF233C",
+              fontSize: 14,
+              fontWeight: 600,
+              color: "#fff",
+              cursor: isDeleting ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              transition: "background 0.15s",
+            }}
+            onMouseEnter={e => { if (!isDeleting) e.currentTarget.style.background = "#D41C34" }}
+            onMouseLeave={e => { if (!isDeleting) e.currentTarget.style.background = "#EF233C" }}
+          >
+            {isDeleting ? (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ animation: "spin 0.8s linear infinite" }}>
+                  <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3" />
+                  <path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" strokeWidth="3" strokeLinecap="round" />
+                </svg>
+                Deleting...
+              </>
+            ) : (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Yes, Delete
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </>
+  )
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function QRPage() {
   const [qrName, setQrName]   = useState("")
   const [qrCodes, setQrCodes] = useState<QRCodeRow[]>([])
   const [loading, setLoading] = useState(false)
   const [toast, setToast]     = useState("")
+
+  // Delete modal state
+  const [deleteTarget, setDeleteTarget] = useState<QRCodeRow | null>(null)
+  const [isDeleting, setIsDeleting]     = useState(false)
 
   const fetchQRCodes = async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -123,15 +298,33 @@ export default function QRPage() {
     setLoading(false)
   }
 
-  const deleteQR = async (id: string) => {
-    if (!confirm("Delete this QR?")) return
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return
-    await supabase.from("qr_codes").delete().eq("id", id).eq("user_id", session.user.id)
-    fetchQRCodes()
+  // Opens the modal instead of native confirm()
+  const promptDelete = (qr: QRCodeRow) => {
+    setDeleteTarget(qr)
   }
 
-  // name param added so the toast can say which QR was downloaded
+  // Called when user confirms inside the modal
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+
+    setIsDeleting(true)
+    const { data: { session } } = await supabase.auth.getSession()
+
+    if (session) {
+      await supabase
+        .from("qr_codes")
+        .delete()
+        .eq("id", deleteTarget.id)
+        .eq("user_id", session.user.id)
+
+      fetchQRCodes()
+      setToast(`QR code "${deleteTarget.name}" and its orders were deleted.`)
+    }
+
+    setIsDeleting(false)
+    setDeleteTarget(null)
+  }
+
   const downloadQR = (slug: string, name: string) => {
     const canvas = document.getElementById(`qr-${slug}`) as HTMLCanvasElement
     if (!canvas) return
@@ -154,6 +347,16 @@ export default function QRPage() {
     <div className="space-y-8">
 
       {toast && <Toast message={toast} onClose={() => setToast("")} />}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <DeleteConfirmModal
+          qrName={deleteTarget.name}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+          isDeleting={isDeleting}
+        />
+      )}
 
       {/* TITLE */}
       <h2 className="text-2xl font-bold text-black-500">QR Codes</h2>
@@ -190,7 +393,7 @@ export default function QRPage() {
               <div className="flex justify-between items-center">
                 <h4 className="font-semibold text-black-500">{qr.name}</h4>
                 <button
-                  onClick={() => deleteQR(qr.id)}
+                  onClick={() => promptDelete(qr)}        // ← opens modal
                   className="text-xs text-red-500 hover:text-red-700"
                 >
                   Delete
