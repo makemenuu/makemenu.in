@@ -1,6 +1,5 @@
 "use client"
-
-import { supabase } from "@/lib/supabase"
+import { supabase } from "@/lib/supabaseClient"
 import Topbar from "@/components/Topbar"
 import { useEffect, useState, useRef, useMemo } from "react"
 
@@ -44,6 +43,7 @@ const fetchData = async () => {
     .from("order_items")
     .select("*")
     .in("order_id", orderIds)
+
 
   // ✅ IMPORTANT — SET FILTERED DATA
   setOrders(todayOrders)

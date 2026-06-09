@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { supabase } from "../../lib/supabase"
+import { supabase } from "@/lib/supabaseClient"
 import { Eye, EyeOff } from "lucide-react"
 import { useRouter } from "next/navigation"
 
@@ -33,6 +33,17 @@ export default function Login() {
     }
 
     const user = data.user
+
+// 🔥 FETCH USER SESSIONS
+const { data: sessions, error: sessionError } = await supabase
+  .from("user_sessions")
+  .select("*")
+  .eq("user_id", user.id)
+
+if (sessionError) {
+  console.error(sessionError)
+}
+
 
     if (!user) {
       setError("Login failed")

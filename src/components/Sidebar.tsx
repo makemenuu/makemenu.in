@@ -3,8 +3,7 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import Image from "next/image"
-import { supabase } from "@/lib/supabase"
-
+import { supabase } from "@/lib/supabaseClient"
 import {
   LayoutDashboard,
   Plus,

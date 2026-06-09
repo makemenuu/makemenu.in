@@ -1,6 +1,6 @@
 "use client"
 
-import { Instagram, Facebook } from "lucide-react"
+import { Instagram, Facebook, Linkedin } from "lucide-react"
 import Link from "next/link"
 
 export default function Footer() {
@@ -140,6 +140,16 @@ export default function Footer() {
             className="hover:text-blue-600 transition"
           >
             <Facebook size={28} />
+          </a>
+
+
+           <a
+            href="https://www.linkedin.com/company/makemenu"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-blue-600 transition"
+          >
+            <Linkedin size={28} />
           </a>
 
         </div>

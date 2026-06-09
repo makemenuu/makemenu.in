@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { supabase } from "@/lib/supabaseClient"
 import Sidebar from "@/components/Sidebar"
 import { ThemeProvider } from "@/context/ThemeContext"
 import LogoutModal from "@/components/LogoutModal"
@@ -15,51 +15,96 @@ export default function DashboardLayout({
 }) {
   const router = useRouter()
 
-  const [loading, setLoading] = useState(true)
+
   const [showLogout, setShowLogout] = useState(false)
   const [showSidebar, setShowSidebar] = useState(false)
+  const [allowed, setAllowed] = useState(false)
+  const [checking, setChecking] = useState(true)
 
-  useEffect(() => {
-    const checkAccess = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+useEffect(() => {
+  let isMounted = true
 
-      // ❌ NOT LOGGED IN
-      if (!user) {
-        router.push("/login")
-        return
-      }
+  const checkAccess = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-      // 🔍 CHECK IF SETUP DONE
-      const { data } = await supabase
-        .from("restaurant_settings")
-        .select("user_id")
-        .eq("user_id", user.id)
-        .maybeSingle()
-
-      // ❌ NOT SETUP → REDIRECT
-      if (!data) {
-        router.push("/setup")
-        return
-      }
-
-      // ✅ ALLOWED
-      setLoading(false)
+    if (!user) {
+      router.replace("/login")
+      return
     }
 
-    checkAccess()
-  }, [router])
+    const { data: dbUser } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", user.id)
+      .single()
 
-  // ⏳ LOADING STATE
-  if (loading) {
-    return (
-      <div className="h-screen flex items-center justify-center">
-        Loading...
-      </div>
-    )
+    if (!dbUser) {
+      router.replace("/login")
+      return
+    }
+
+    // 🔒 FROZEN USER
+if (dbUser?.is_frozen) {
+  setChecking(false)
+  router.replace("/frozen")
+  return
+}
+
+    const now = new Date()
+
+    // 🔥 PAID USER
+    if (dbUser.is_paid) {
+      if (!dbUser.subscription_end) {
+        router.replace("/upgrade")
+        return
+      }
+
+      const subEnd = new Date(dbUser.subscription_end)
+
+      if (subEnd < now) {
+        router.replace("/upgrade")
+        return
+      }
+
+      if (isMounted) setAllowed(true)
+      return
+    }
+
+    // 🔥 TRIAL USER
+    if (dbUser.trial_end) {
+      const trialEnd = new Date(dbUser.trial_end)
+
+      if (trialEnd < now) {
+        router.replace("/upgrade")
+        return
+      }
+    }
+
+    // 🔥 SETUP CHECK
+    const { data: setup } = await supabase
+      .from("restaurant_settings")
+      .select("user_id")
+      .eq("user_id", user.id)
+      .maybeSingle()
+
+    if (!setup) {
+      router.replace("/setup")
+      return
+    }
+
+    if (isMounted) setAllowed(true)
   }
 
+  checkAccess()
+
+  return () => {
+    isMounted = false
+  }
+}, [])
+
+if (!allowed) return null
   return (
     <ThemeProvider>
       <div className="flex min-h-screen bg-[#f5f5f5] text-black">

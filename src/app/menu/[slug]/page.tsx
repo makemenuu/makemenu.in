@@ -2,8 +2,7 @@
 
 import { useEffect, useState, useRef } from "react"
 import { useParams } from "next/navigation"
-import { supabase } from "@/lib/supabase"
-
+import { supabase } from "@/lib/supabaseClient"
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Category = {
   id: string

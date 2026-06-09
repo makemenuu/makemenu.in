@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { supabase } from "../../lib/supabase"
+import { supabase } from "@/lib/supabaseClient"
 import { Eye, EyeOff } from "lucide-react"
 
 
