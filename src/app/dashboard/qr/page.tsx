@@ -420,7 +420,12 @@ export default function QRPage() {
     setCreating(true)
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { setCreating(false); return }
-    const slug = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
+    const baseSlug = name
+  .toLowerCase()
+  .replace(/\s+/g, "-")
+  .replace(/[^a-z0-9-]/g, "")
+
+const slug = `${baseSlug}-${session.user.id.slice(0, 8)}`
     const { error } = await supabase.from("qr_codes").insert({
       user_id: session.user.id, name, slug,
       caption: "Scan to order", tagline: "No waiting. Just good food.",
