@@ -9,7 +9,7 @@ export default function ForgotPassword() {
 
   const handleReset = async () => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: "http://localhost:3000/reset-password",
+      redirectTo: "https://makemenu.in/reset-password",
     })
 
     if (error) {
