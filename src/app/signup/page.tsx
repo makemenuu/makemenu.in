@@ -84,7 +84,7 @@ export default function Signup() {
       email,
       password,
       options: {
-        emailRedirectTo: "http://localhost:3000/login",
+        emailRedirectTo: "https://makemenu.in/login",
         data: {
           name: name.trim(),
           phone: phone,
