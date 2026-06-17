@@ -4,9 +4,6 @@ import { useEffect, useRef, useState, useCallback } from "react"
 import { supabase } from "@/lib/supabaseClient"
 import { QRCodeCanvas } from "qrcode.react"
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
 type CardStyle = "minimal" | "bold" | "frame" | "dark"
 type FontStyle = "serif" | "sans" | "mono"
 
@@ -21,9 +18,6 @@ type QRCodeRow = {
   font_style: FontStyle | null
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Constants
-// ─────────────────────────────────────────────────────────────────────────────
 const ACCENTS = [
   "#E24B4A", "#1D9E75", "#378ADD", "#7F77DD",
   "#D85A30", "#BA7517", "#444441", "#D4537E",
@@ -40,9 +34,6 @@ const FONT_STYLES: { value: FontStyle; label: string }[] = [
   { value: "mono",  label: "Monospace"  },
 ]
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Canvas helpers
-// ─────────────────────────────────────────────────────────────────────────────
 function rrect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath()
   ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r)
@@ -58,8 +49,6 @@ function getFonts(f: FontStyle, s: number) {
   return                    { title: `bold ${26*s}px system-ui,sans-serif`, caption: `bold ${19*s}px system-ui,sans-serif`, tag: `${12*s}px system-ui,sans-serif`, url: `${10*s}px system-ui,sans-serif` }
 }
 
-// Draws everything EXCEPT the QR — returns a function to draw QR on top
-// This way we can draw the card, then await image load, then stamp QR
 function drawCardBase(
   ctx: CanvasRenderingContext2D, W: number, H: number, s: number,
   o: { title: string; caption: string; tagline: string; style: CardStyle; accent: string; font: FontStyle; url: string }
@@ -71,33 +60,50 @@ function drawCardBase(
   const bdr  = dark ? "#333" : "#e5e7eb"
   const f    = getFonts(o.font, s)
 
+  // ── helper: draw text shrunk to fit within maxWidth ──────────────────────
+  const fitText = (text: string, baseFont: string, maxWidth: number, x: number, y: number) => {
+    let fontSize = parseFloat(baseFont.match(/(\d+(\.\d+)?)px/)?.[1] ?? "26")
+    const fontFamily = baseFont.replace(/[\d.]+px/, "").replace("bold ", "").trim()
+    const isBold = baseFont.startsWith("bold")
+    let tries = 0
+    while (tries < 20) {
+      ctx.font = `${isBold ? "bold " : ""}${fontSize}px ${fontFamily}`
+      if (ctx.measureText(text).width <= maxWidth || fontSize <= 10) break
+      fontSize -= 1
+      tries++
+    }
+    ctx.fillText(text, x, y)
+  }
+
   ctx.clearRect(0, 0, W, H)
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H)
 
+  const maxTitleW = W - 40 * s  // 20px padding each side
+
   if (o.style === "bold") {
     ctx.fillStyle = o.accent; ctx.fillRect(0, 0, W, 88 * s)
-    ctx.fillStyle = "#fff"; ctx.font = f.title; ctx.textAlign = "center"
-    ctx.fillText(o.title, W / 2, 54 * s)
+    ctx.fillStyle = "#fff"; ctx.textAlign = "center"
+    fitText(o.title, f.title, maxTitleW, W / 2, 54 * s)
     ctx.font = `${12*s}px system-ui,sans-serif`; ctx.fillStyle = "rgba(255,255,255,.78)"
     ctx.fillText(o.caption.toLowerCase(), W / 2, 74 * s)
   } else if (o.style === "frame") {
     ctx.strokeStyle = o.accent; ctx.lineWidth = 4 * s
     rrect(ctx, 12*s, 12*s, W - 24*s, H - 24*s, 14*s); ctx.stroke()
     ctx.lineWidth = 1.5 * s; rrect(ctx, 19*s, 19*s, W - 38*s, H - 38*s, 10*s); ctx.stroke()
-    ctx.fillStyle = fg; ctx.font = f.title; ctx.textAlign = "center"; ctx.fillText(o.title, W / 2, 58 * s)
+    ctx.fillStyle = fg; ctx.textAlign = "center"
+    fitText(o.title, f.title, maxTitleW, W / 2, 58 * s)
     ctx.fillStyle = o.accent; ctx.fillRect(W / 2 - 22*s, 68*s, 44*s, 2*s)
     ctx.fillStyle = sub; ctx.font = `${12*s}px system-ui,sans-serif`; ctx.fillText(o.caption, W / 2, 84 * s)
   } else {
     ctx.fillStyle = o.accent; ctx.fillRect(0, 0, W, 5 * s)
-    ctx.fillStyle = fg; ctx.font = f.title; ctx.textAlign = "center"; ctx.fillText(o.title, W / 2, 54 * s)
+    ctx.fillStyle = fg; ctx.textAlign = "center"
+    fitText(o.title, f.title, maxTitleW, W / 2, 54 * s)
     ctx.fillStyle = sub; ctx.font = `${12*s}px system-ui,sans-serif`; ctx.fillText(o.caption, W / 2, 72 * s)
   }
 
-  // QR placeholder area (will be filled after image loads)
   const qrSz = 200 * s, qrX = (W - qrSz) / 2, qrY = 96 * s
   if (!dark) { ctx.fillStyle = "#fff"; ctx.fillRect(qrX - 8*s, qrY - 8*s, qrSz + 16*s, qrSz + 16*s) }
 
-  // below-QR text
   const by = 312 * s
   ctx.fillStyle = dark ? "#fff" : o.accent; ctx.font = f.caption; ctx.textAlign = "center"
   ctx.fillText(o.caption, W / 2, by + 10*s)
@@ -107,15 +113,11 @@ function drawCardBase(
   ctx.fillStyle = dark ? "rgba(255,255,255,.3)" : "#aaa"; ctx.font = f.url
   ctx.fillText(o.url, W / 2, by + 68*s)
 
-  // return qr stamp function
   return (qrImg: HTMLImageElement) => {
     ctx.drawImage(qrImg, qrX, qrY, qrSz, qrSz)
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Render a full card onto a canvas, including the QR, properly awaited
-// ─────────────────────────────────────────────────────────────────────────────
 function renderCardToCanvas(
   canvas: HTMLCanvasElement,
   W: number, H: number, s: number,
@@ -126,21 +128,12 @@ function renderCardToCanvas(
     const ctx = canvas.getContext("2d")!
     const stampQR = drawCardBase(ctx, W, H, s, opts)
     const img = new window.Image()
-    img.onload = () => {
-      stampQR(img)
-      resolve()
-    }
-    img.onerror = () => {
-      // QR failed to load — resolve anyway so download doesn't hang
-      resolve()
-    }
+    img.onload = () => { stampQR(img); resolve() }
+    img.onerror = () => { resolve() }
     img.src = qrDataUrl
   })
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Toast
-// ─────────────────────────────────────────────────────────────────────────────
 function Toast({ msg, onClose }: { msg: string; onClose: () => void }) {
   useEffect(() => { const t = setTimeout(onClose, 2600); return () => clearTimeout(t) }, [onClose])
   return (
@@ -153,9 +146,6 @@ function Toast({ msg, onClose }: { msg: string; onClose: () => void }) {
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Delete modal
-// ─────────────────────────────────────────────────────────────────────────────
 function DeleteModal({ name, onConfirm, onCancel, busy }: { name: string; onConfirm: () => void; onCancel: () => void; busy: boolean }) {
   return (
     <>
@@ -184,16 +174,15 @@ function DeleteModal({ name, onConfirm, onCancel, busy }: { name: string; onConf
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Designer modal
-// ─────────────────────────────────────────────────────────────────────────────
-function DesignerModal({ qr, menuUrl, onClose, onSaved }: {
-  qr: QRCodeRow; menuUrl: string
+// ── DesignerModal now receives restaurantName prop ────────────────────────────
+function DesignerModal({ qr, menuUrl, restaurantName, onClose, onSaved }: {
+  qr: QRCodeRow
+  menuUrl: string
+  restaurantName: string   // ← NEW PROP
   onClose: () => void
   onSaved: (id: string, patch: Partial<QRCodeRow>) => Promise<void>
 }) {
   const previewCanvasRef = useRef<HTMLCanvasElement>(null)
-  // This div holds a real QRCodeCanvas that we read pixels from
   const hiddenQrRef      = useRef<HTMLDivElement>(null)
 
   const [caption, setCaption] = useState(qr.caption      ?? "Scan to order")
@@ -205,10 +194,7 @@ function DesignerModal({ qr, menuUrl, onClose, onSaved }: {
   const [saving,    setSaving]    = useState(false)
   const [downloading, setDownloading] = useState(false)
 
-  // ── Step 1: capture the hidden QRCodeCanvas as a data URL ─────────────────
-  // We wait for it to paint, then toDataURL() it. Runs whenever accent/style changes.
   const captureQR = useCallback(() => {
-    // give React one tick to re-render the hidden QRCodeCanvas with new colors
     requestAnimationFrame(() => {
       setTimeout(() => {
         const el = hiddenQrRef.current
@@ -227,22 +213,28 @@ function DesignerModal({ qr, menuUrl, onClose, onSaved }: {
 
   useEffect(() => { captureQR() }, [accent, style, captureQR])
 
-  // ── Step 2: re-render preview canvas whenever anything changes ─────────────
   useEffect(() => {
     const canvas = previewCanvasRef.current
     if (!canvas || !qrDataUrl) return
     const W = 300, H = 400, s = 300 / 360
-    renderCardToCanvas(canvas, W, H, s, { title: qr.name, caption, tagline, style, accent, font, url: menuUrl }, qrDataUrl)
-  }, [caption, tagline, style, accent, font, qrDataUrl, qr.name, menuUrl])
+    // ← CHANGED: title is now restaurantName (fallback to qr.name if not set)
+    renderCardToCanvas(canvas, W, H, s, {
+      title: restaurantName || qr.name,
+      caption, tagline, style, accent, font, url: menuUrl
+    }, qrDataUrl)
+  }, [caption, tagline, style, accent, font, qrDataUrl, qr.name, restaurantName, menuUrl])
 
-  // ── Download full card (720×960) ──────────────────────────────────────────
   const downloadCard = async () => {
     const qrUrl = qrDataUrl
     if (!qrUrl) { alert("QR not ready yet — please wait a moment and try again."); return }
     setDownloading(true)
     const W = 720, H = 960
     const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H
-    await renderCardToCanvas(canvas, W, H, 2, { title: qr.name, caption, tagline, style, accent, font, url: menuUrl }, qrUrl)
+    // ← CHANGED: title is now restaurantName
+    await renderCardToCanvas(canvas, W, H, 2, {
+      title: restaurantName || qr.name,
+      caption, tagline, style, accent, font, url: menuUrl
+    }, qrUrl)
     const a = document.createElement("a")
     a.href = canvas.toDataURL("image/png")
     a.download = `${qr.slug}-card.png`
@@ -250,7 +242,6 @@ function DesignerModal({ qr, menuUrl, onClose, onSaved }: {
     setDownloading(false)
   }
 
-  // ── Download plain QR only ────────────────────────────────────────────────
   const downloadQROnly = () => {
     const el = hiddenQrRef.current
     if (!el) return
@@ -291,7 +282,6 @@ function DesignerModal({ qr, menuUrl, onClose, onSaved }: {
 
       <div style={{ position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:10001,background:"#fff",borderRadius:16,border:"1px solid #E5E7EB",boxShadow:"0 24px 64px rgba(0,0,0,.18)",width:"min(96vw,820px)",maxHeight:"92vh",overflowY:"auto",animation:"dsUp .15s ease" }}>
 
-        {/* header */}
         <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"18px 24px 0" }}>
           <div>
             <p style={{ margin:0,fontSize:17,fontWeight:700,color:"#111" }}>Design QR card</p>
@@ -300,10 +290,7 @@ function DesignerModal({ qr, menuUrl, onClose, onSaved }: {
           <button onClick={onClose} style={{ background:"none",border:"1px solid #E5E7EB",borderRadius:8,width:32,height:32,cursor:"pointer",fontSize:18,color:"#6B7280",display:"flex",alignItems:"center",justifyContent:"center" }}>×</button>
         </div>
 
-        {/* body */}
         <div style={{ display:"grid",gridTemplateColumns:"1fr 260px",padding:"20px 24px 8px",gap:0 }}>
-
-          {/* controls */}
           <div style={{ display:"flex",flexDirection:"column",gap:16,paddingRight:24,borderRight:"1px solid #F3F4F6" }}>
             <div><span className="dl">Caption line</span><input className="dsi" value={caption} onChange={e=>setCaption(e.target.value)} placeholder="Scan to order" maxLength={60}/></div>
             <div><span className="dl">Tagline</span><input className="dsi" value={tagline} onChange={e=>setTagline(e.target.value)} placeholder="No waiting. Just good food." maxLength={80}/></div>
@@ -328,7 +315,6 @@ function DesignerModal({ qr, menuUrl, onClose, onSaved }: {
             </div>
           </div>
 
-          {/* live preview */}
           <div style={{ paddingLeft:24,display:"flex",flexDirection:"column",gap:8 }}>
             <span className="dl">Live preview</span>
             <canvas
@@ -343,7 +329,6 @@ function DesignerModal({ qr, menuUrl, onClose, onSaved }: {
           </div>
         </div>
 
-        {/* footer */}
         <div style={{ display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap",padding:"16px 24px 20px",borderTop:"1px solid #F3F4F6" }}>
           <button className="dfb" onClick={onClose}>Cancel</button>
           <button className="dfb" onClick={downloadQROnly}>QR only</button>
@@ -366,11 +351,6 @@ function DesignerModal({ qr, menuUrl, onClose, onSaved }: {
           </button>
         </div>
 
-        {/*
-          Hidden QRCodeCanvas — rendered off-screen so we can read its pixels.
-          Must stay mounted the entire time the modal is open.
-          We read it with toDataURL() inside captureQR().
-        */}
         <div
           ref={hiddenQrRef}
           style={{ position:"fixed", left:-9999, top:-9999, pointerEvents:"none" }}
@@ -393,13 +373,14 @@ function DesignerModal({ qr, menuUrl, onClose, onSaved }: {
 // Main page
 // ─────────────────────────────────────────────────────────────────────────────
 export default function QRPage() {
-  const [qrName,       setQrName]       = useState("")
-  const [qrCodes,      setQrCodes]      = useState<QRCodeRow[]>([])
-  const [creating,     setCreating]     = useState(false)
-  const [toast,        setToast]        = useState("")
-  const [deleteTarget, setDeleteTarget] = useState<QRCodeRow | null>(null)
-  const [deleting,     setDeleting]     = useState(false)
-  const [designTarget, setDesignTarget] = useState<QRCodeRow | null>(null)
+  const [qrName,         setQrName]         = useState("")
+  const [qrCodes,        setQrCodes]        = useState<QRCodeRow[]>([])
+  const [creating,       setCreating]       = useState(false)
+  const [toast,          setToast]          = useState("")
+  const [deleteTarget,   setDeleteTarget]   = useState<QRCodeRow | null>(null)
+  const [deleting,       setDeleting]       = useState(false)
+  const [designTarget,   setDesignTarget]   = useState<QRCodeRow | null>(null)
+  const [restaurantName, setRestaurantName] = useState("")  // ← restaurant name from receipt_settings
 
   const fetchQRCodes = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -412,7 +393,22 @@ export default function QRPage() {
     if (!error) setQrCodes((data as QRCodeRow[]) ?? [])
   }, [])
 
-  useEffect(() => { fetchQRCodes() }, [fetchQRCodes])
+  useEffect(() => {
+    fetchQRCodes()
+
+    // fetch restaurant name from receipt_settings
+    const loadRestaurantName = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+      const { data } = await supabase
+        .from("receipt_settings")
+        .select("restaurant_name")
+        .eq("user_id", session.user.id)
+        .maybeSingle()
+      if (data?.restaurant_name) setRestaurantName(data.restaurant_name)
+    }
+    loadRestaurantName()
+  }, [fetchQRCodes])
 
   const createQRCode = async () => {
     const name = qrName.trim()
@@ -421,11 +417,10 @@ export default function QRPage() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { setCreating(false); return }
     const baseSlug = name
-  .toLowerCase()
-  .replace(/\s+/g, "-")
-  .replace(/[^a-z0-9-]/g, "")
-
-const slug = `${baseSlug}-${session.user.id.slice(0, 8)}`
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-]/g, "")
+    const slug = `${baseSlug}-${session.user.id.slice(0, 8)}`
     const { error } = await supabase.from("qr_codes").insert({
       user_id: session.user.id, name, slug,
       caption: "Scan to order", tagline: "No waiting. Just good food.",
@@ -480,6 +475,7 @@ const slug = `${baseSlug}-${session.user.id.slice(0, 8)}`
         <DesignerModal
           qr={designTarget}
           menuUrl={menuUrl(designTarget.slug)}
+          restaurantName={restaurantName}   // ← PASS DOWN
           onClose={() => setDesignTarget(null)}
           onSaved={saveDesign}
         />
@@ -525,6 +521,7 @@ const slug = `${baseSlug}-${session.user.id.slice(0, 8)}`
               <div style={{ height:4, background:accent }}/>
               <div className="p-4 space-y-3">
                 <div className="flex justify-between items-center">
+                  {/* Front card: show qr.name (Table 1, Counter, etc.) on the outside label */}
                   <h4 className="font-semibold text-sm">{qr.name}</h4>
                   <button onClick={() => setDeleteTarget(qr)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
                 </div>
@@ -537,11 +534,15 @@ const slug = `${baseSlug}-${session.user.id.slice(0, 8)}`
                     bgColor={isDark?"#111111":"#ffffff"}
                     level="H"
                   />
+                  {/* Inside QR box: show restaurant name from receipt settings */}
+                  <p style={{ margin:0,fontSize:12,color:isDark?"#fff":"#111",fontWeight:600,textAlign:"center" }}>
+                    {restaurantName || qr.name}
+                  </p>
                   {qr.caption && (
                     <p style={{ margin:0,fontSize:11,color:isDark?"#aaa":"#777",fontStyle:"italic",textAlign:"center" }}>{qr.caption}</p>
                   )}
                 </div>
-                <p className="text-xs break-all text-red-400">{url}</p>
+                {/* URL line removed */}
                 <div className="flex gap-2 flex-wrap">
                   <button onClick={() => setDesignTarget(qr)} style={{ display:"flex",alignItems:"center",gap:5,background:"#E24B4A",color:"#fff",border:"none",padding:"7px 13px",borderRadius:8,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit" }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 20h9" stroke="#fff" strokeWidth="2" strokeLinecap="round"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
