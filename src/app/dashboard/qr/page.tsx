@@ -43,10 +43,36 @@ function rrect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h
   ctx.closePath()
 }
 
+// ── font family info by style ─────────────────────────────────────────────────
+function getFontMeta(f: FontStyle): { family: string } {
+  if (f === "serif") return { family: "Georgia,serif" }
+  if (f === "mono")  return { family: '"Courier New",monospace' }
+  return                    { family: "system-ui,sans-serif" }
+}
+
 function getFonts(f: FontStyle, s: number) {
   if (f === "serif") return { title: `bold ${28*s}px Georgia,serif`, caption: `bold ${20*s}px Georgia,serif`, tag: `${13*s}px Georgia,serif`, url: `${10*s}px Georgia,serif` }
   if (f === "mono")  return { title: `bold ${22*s}px "Courier New",monospace`, caption: `bold ${17*s}px "Courier New",monospace`, tag: `${11*s}px "Courier New",monospace`, url: `${9*s}px "Courier New",monospace` }
   return                    { title: `bold ${26*s}px system-ui,sans-serif`, caption: `bold ${19*s}px system-ui,sans-serif`, tag: `${12*s}px system-ui,sans-serif`, url: `${10*s}px system-ui,sans-serif` }
+}
+
+// ── draw text shrunk to fit — uses raw startSize number, no string parsing ────
+function drawFitText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  startSize: number,
+  family: string,
+) {
+  let size = startSize
+  while (size > 8) {
+    ctx.font = `bold ${size}px ${family}`
+    if (ctx.measureText(text).width <= maxWidth) break
+    size -= 0.5
+  }
+  ctx.fillText(text, x, y)
 }
 
 function drawCardBase(
@@ -59,31 +85,22 @@ function drawCardBase(
   const sub  = dark ? "#999" : "#666"
   const bdr  = dark ? "#333" : "#e5e7eb"
   const f    = getFonts(o.font, s)
+  const { family } = getFontMeta(o.font)
 
-  // ── helper: draw text shrunk to fit within maxWidth ──────────────────────
-  const fitText = (text: string, baseFont: string, maxWidth: number, x: number, y: number) => {
-    let fontSize = parseFloat(baseFont.match(/(\d+(\.\d+)?)px/)?.[1] ?? "26")
-    const fontFamily = baseFont.replace(/[\d.]+px/, "").replace("bold ", "").trim()
-    const isBold = baseFont.startsWith("bold")
-    let tries = 0
-    while (tries < 20) {
-      ctx.font = `${isBold ? "bold " : ""}${fontSize}px ${fontFamily}`
-      if (ctx.measureText(text).width <= maxWidth || fontSize <= 10) break
-      fontSize -= 1
-      tries++
-    }
-    ctx.fillText(text, x, y)
-  }
+  // title start size and max usable width — both scale correctly with s
+  const titleStartSize =
+    o.font === "serif" ? 28 * s :
+    o.font === "mono"  ? 22 * s :
+                         26 * s
+  const maxTitleW = W - 48 * s
 
   ctx.clearRect(0, 0, W, H)
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H)
 
-  const maxTitleW = W - 40 * s  // 20px padding each side
-
   if (o.style === "bold") {
     ctx.fillStyle = o.accent; ctx.fillRect(0, 0, W, 88 * s)
     ctx.fillStyle = "#fff"; ctx.textAlign = "center"
-    fitText(o.title, f.title, maxTitleW, W / 2, 54 * s)
+    drawFitText(ctx, o.title, W / 2, 54 * s, maxTitleW, titleStartSize, family)
     ctx.font = `${12*s}px system-ui,sans-serif`; ctx.fillStyle = "rgba(255,255,255,.78)"
     ctx.fillText(o.caption.toLowerCase(), W / 2, 74 * s)
   } else if (o.style === "frame") {
@@ -91,13 +108,14 @@ function drawCardBase(
     rrect(ctx, 12*s, 12*s, W - 24*s, H - 24*s, 14*s); ctx.stroke()
     ctx.lineWidth = 1.5 * s; rrect(ctx, 19*s, 19*s, W - 38*s, H - 38*s, 10*s); ctx.stroke()
     ctx.fillStyle = fg; ctx.textAlign = "center"
-    fitText(o.title, f.title, maxTitleW, W / 2, 58 * s)
+    drawFitText(ctx, o.title, W / 2, 58 * s, maxTitleW, titleStartSize, family)
     ctx.fillStyle = o.accent; ctx.fillRect(W / 2 - 22*s, 68*s, 44*s, 2*s)
     ctx.fillStyle = sub; ctx.font = `${12*s}px system-ui,sans-serif`; ctx.fillText(o.caption, W / 2, 84 * s)
   } else {
+    // minimal + dark
     ctx.fillStyle = o.accent; ctx.fillRect(0, 0, W, 5 * s)
     ctx.fillStyle = fg; ctx.textAlign = "center"
-    fitText(o.title, f.title, maxTitleW, W / 2, 54 * s)
+    drawFitText(ctx, o.title, W / 2, 54 * s, maxTitleW, titleStartSize, family)
     ctx.fillStyle = sub; ctx.font = `${12*s}px system-ui,sans-serif`; ctx.fillText(o.caption, W / 2, 72 * s)
   }
 
@@ -176,11 +194,10 @@ function DeleteModal({ name, onConfirm, onCancel, busy }: { name: string; onConf
   )
 }
 
-// ── DesignerModal now receives restaurantName prop ────────────────────────────
 function DesignerModal({ qr, menuUrl, restaurantName, onClose, onSaved }: {
   qr: QRCodeRow
   menuUrl: string
-  restaurantName: string   // ← NEW PROP
+  restaurantName: string
   onClose: () => void
   onSaved: (id: string, patch: Partial<QRCodeRow>) => Promise<void>
 }) {
@@ -219,7 +236,6 @@ function DesignerModal({ qr, menuUrl, restaurantName, onClose, onSaved }: {
     const canvas = previewCanvasRef.current
     if (!canvas || !qrDataUrl) return
     const W = 300, H = 400, s = 300 / 360
-    // ← CHANGED: title is now restaurantName (fallback to qr.name if not set)
     renderCardToCanvas(canvas, W, H, s, {
       title: restaurantName || qr.name,
       caption, tagline, style, accent, font, url: menuUrl
@@ -232,7 +248,6 @@ function DesignerModal({ qr, menuUrl, restaurantName, onClose, onSaved }: {
     setDownloading(true)
     const W = 720, H = 960
     const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H
-    // ← CHANGED: title is now restaurantName
     await renderCardToCanvas(canvas, W, H, 2, {
       title: restaurantName || qr.name,
       caption, tagline, style, accent, font, url: menuUrl
@@ -382,7 +397,7 @@ export default function QRPage() {
   const [deleteTarget,   setDeleteTarget]   = useState<QRCodeRow | null>(null)
   const [deleting,       setDeleting]       = useState(false)
   const [designTarget,   setDesignTarget]   = useState<QRCodeRow | null>(null)
-  const [restaurantName, setRestaurantName] = useState("")  // ← restaurant name from receipt_settings
+  const [restaurantName, setRestaurantName] = useState("")
 
   const fetchQRCodes = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -397,8 +412,6 @@ export default function QRPage() {
 
   useEffect(() => {
     fetchQRCodes()
-
-    // fetch restaurant name from receipt_settings
     const loadRestaurantName = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
@@ -477,7 +490,7 @@ export default function QRPage() {
         <DesignerModal
           qr={designTarget}
           menuUrl={menuUrl(designTarget.slug)}
-          restaurantName={restaurantName}   // ← PASS DOWN
+          restaurantName={restaurantName}
           onClose={() => setDesignTarget(null)}
           onSaved={saveDesign}
         />
@@ -485,7 +498,6 @@ export default function QRPage() {
 
       <h2 className="text-2xl font-bold">QR Codes</h2>
 
-      {/* create */}
       <div className="bg-white p-4 rounded-lg shadow max-w-md space-y-3">
         <h3 className="font-semibold">Create QR code</h3>
         <input
@@ -512,7 +524,6 @@ export default function QRPage() {
         </div>
       )}
 
-      {/* grid */}
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {qrCodes.map(qr => {
           const url    = menuUrl(qr.slug)
@@ -523,7 +534,6 @@ export default function QRPage() {
               <div style={{ height:4, background:accent }}/>
               <div className="p-4 space-y-3">
                 <div className="flex justify-between items-center">
-                  {/* Front card: show qr.name (Table 1, Counter, etc.) on the outside label */}
                   <h4 className="font-semibold text-sm">{qr.name}</h4>
                   <button onClick={() => setDeleteTarget(qr)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
                 </div>
@@ -536,7 +546,6 @@ export default function QRPage() {
                     bgColor={isDark?"#111111":"#ffffff"}
                     level="H"
                   />
-                  {/* Inside QR box: show restaurant name from receipt settings */}
                   <p style={{ margin:0,fontSize:12,color:isDark?"#fff":"#111",fontWeight:600,textAlign:"center" }}>
                     {restaurantName || qr.name}
                   </p>
@@ -544,7 +553,6 @@ export default function QRPage() {
                     <p style={{ margin:0,fontSize:11,color:isDark?"#aaa":"#777",fontStyle:"italic",textAlign:"center" }}>{qr.caption}</p>
                   )}
                 </div>
-                {/* URL line removed */}
                 <div className="flex gap-2 flex-wrap">
                   <button onClick={() => setDesignTarget(qr)} style={{ display:"flex",alignItems:"center",gap:5,background:"#E24B4A",color:"#fff",border:"none",padding:"7px 13px",borderRadius:8,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit" }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 20h9" stroke="#fff" strokeWidth="2" strokeLinecap="round"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
