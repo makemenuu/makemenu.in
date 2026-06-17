@@ -3,10 +3,11 @@
 import { useEffect, useState, useRef } from "react"
 import { useParams } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
-// ── Types ─────────────────────────────────────────────────────────────────────
+
 type Category = {
   id: string
   name: string
+  takeaway_charge?: number
 }
 
 type Product = {
@@ -24,7 +25,6 @@ type CartItem = {
   quantity: number
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function getDistanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371000
   const toRad = (x: number) => (x * Math.PI) / 180
@@ -62,23 +62,15 @@ function getGreeting(): { emoji: string; text: string } {
   return { emoji: "🌙", text: "Good Night!" }
 }
 
-// ── MakeMenu Logo — hardcoded, same for every restaurant ─────────────────────
-// This is the app branding. It is NOT stored in the database.
 function MakeMenuLogo() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-      </svg>
-      <span style={{
-        fontFamily: "Georgia, serif", fontSize: 16, fontWeight: 700,
-        color: "#E8192C", letterSpacing: "-0.3px",
-      }}>
-      </span>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" />
+      <span style={{ fontFamily: "Georgia, serif", fontSize: 16, fontWeight: 700, color: "#E8192C", letterSpacing: "-0.3px" }} />
     </div>
   )
 }
 
-// ── Closed Screen ─────────────────────────────────────────────────────────────
 function ClosedScreen({ openTime, closeTime }: { openTime: string; closeTime: string }) {
   return (
     <div style={{
@@ -115,7 +107,6 @@ function ClosedScreen({ openTime, closeTime }: { openTime: string; closeTime: st
   )
 }
 
-// ── Loading Screen ────────────────────────────────────────────────────────────
 function LoadingScreen({ message = "Loading menu..." }: { message?: string }) {
   return (
     <div style={{
@@ -134,7 +125,6 @@ function LoadingScreen({ message = "Loading menu..." }: { message?: string }) {
   )
 }
 
-// ── Location Denied Screen ────────────────────────────────────────────────────
 function LocationDeniedScreen({ message }: { message: string }) {
   return (
     <div style={{
@@ -161,94 +151,58 @@ function LocationDeniedScreen({ message }: { message: string }) {
   )
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function MenuPage() {
   const params = useParams()
   const slug = String(params.slug)
 
-  const [loading, setLoading] = useState(true)
-  const [restaurantOpen, setRestaurantOpen] = useState<boolean | null>(null)
-  const [openTime, setOpenTime] = useState("")
-  const [closeTime, setCloseTime] = useState("")
-
-  // Comes from receipt_settings.restaurant_name — the field the owner fills in at
-  // Settings → Receipt Settings → "Restaurant Name on Receipt"
-  const [restaurantName, setRestaurantName] = useState("Restaurant")
-
-  const [locationStatus, setLocationStatus] = useState<"checking" | "allowed" | "denied" | "error">("checking")
-  const [locationError, setLocationError] = useState("")
-
-  const [qrId, setQrId] = useState<string | null>(null)
-  const [restaurantId, setRestaurantId] = useState<string | null>(null)
+  const [loading, setLoading]                   = useState(true)
+  const [restaurantOpen, setRestaurantOpen]     = useState<boolean | null>(null)
+  const [openTime, setOpenTime]                 = useState("")
+  const [closeTime, setCloseTime]               = useState("")
+  const [restaurantName, setRestaurantName]     = useState("Restaurant")
+  const [locationStatus, setLocationStatus]     = useState<"checking" | "allowed" | "denied" | "error">("checking")
+  const [locationError, setLocationError]       = useState("")
+  const [qrId, setQrId]                         = useState<string | null>(null)
+  const [restaurantId, setRestaurantId]         = useState<string | null>(null)
   const [restaurantLocation, setRestaurantLocation] = useState<{ lat: number; lng: number } | null>(null)
-
-  const [categories, setCategories] = useState<Category[]>([])
-  const [products, setProducts] = useState<Product[]>([])
-
-  const [cart, setCart] = useState<CartItem[]>([])
-  const [customerName, setCustomerName] = useState("")
-  const [orderType, setOrderType] = useState<"dine_in" | "takeaway" | "">("")
-  const [placingOrder, setPlacingOrder] = useState(false)
-  const [orderSuccess, setOrderSuccess] = useState(false)
-
-  const [activeCategory, setActiveCategory] = useState<string>("all")
-  const [searchQuery, setSearchQuery] = useState("")
-  const [cartOpen, setCartOpen] = useState(false)
+  const [categories, setCategories]             = useState<Category[]>([])
+  const [products, setProducts]                 = useState<Product[]>([])
+  const [cart, setCart]                         = useState<CartItem[]>([])
+  const [customerName, setCustomerName]         = useState("")
+  const [orderType, setOrderType]               = useState<"dine_in" | "takeaway" | "">("")
+  const [placingOrder, setPlacingOrder]         = useState(false)
+  const [orderSuccess, setOrderSuccess]         = useState(false)
+  const [activeCategory, setActiveCategory]     = useState<string>("all")
+  const [searchQuery, setSearchQuery]           = useState("")
+  const [cartOpen, setCartOpen]                 = useState(false)
 
   const catScrollRef = useRef<HTMLDivElement>(null)
   const greeting = getGreeting()
 
-  // ── Fetch menu data ─────────────────────────────────────────────────────────
   useEffect(() => {
     const fetchMenu = async () => {
-      // 1. Resolve QR slug → get the owner's user_id
       const { data: qr, error } = await supabase
-        .from("qr_codes")
-        .select("*")
-        .eq("slug", slug)
-        .single()
-
+        .from("qr_codes").select("*").eq("slug", slug).single()
       if (error || !qr) { alert("Invalid QR"); return }
-
       setQrId(qr.id)
       setRestaurantId(qr.restaurant_id || null)
-
       const userId = qr.user_id
 
-      // 2. Fire all queries in parallel — avoids sequential waterfall on slow mobile networks
       const [
         { data: restSettings },
         { data: receiptSettings, error: receiptError },
         { data: catData },
         { data: prodData },
       ] = await Promise.all([
-        supabase
-          .from("restaurant_settings")
-          .select("latitude, longitude, open_time, close_time")
-          .eq("user_id", userId)
-          .maybeSingle(),
-        supabase
-          .from("receipt_settings")
-          .select("restaurant_name")
-          .eq("user_id", userId)
-          .maybeSingle(),
+        supabase.from("restaurant_settings").select("latitude, longitude, open_time, close_time").eq("user_id", userId).maybeSingle(),
+        supabase.from("receipt_settings").select("restaurant_name").eq("user_id", userId).maybeSingle(),
         supabase.from("categories").select("*").eq("user_id", userId),
         supabase.from("products").select("*").eq("user_id", userId),
       ])
 
-      // 3. Restaurant name — receipt_settings.restaurant_name
-      //    (set by owner in Settings → Receipt Settings → "Restaurant Name on Receipt")
-      //    Log to diagnose any RLS issue on unauthenticated mobile sessions
-      if (receiptError) {
-        console.error("[MenuPage] receipt_settings error:", receiptError.message, "code:", receiptError.code)
-      }
-      console.log("[MenuPage] receipt_settings data:", receiptSettings)
+      if (receiptError) console.error("[MenuPage] receipt_settings error:", receiptError.message)
+      if (receiptSettings?.restaurant_name?.trim()) setRestaurantName(receiptSettings.restaurant_name.trim())
 
-      if (receiptSettings?.restaurant_name?.trim()) {
-        setRestaurantName(receiptSettings.restaurant_name.trim())
-      }
-
-      // 4. Open/close + geofence
       if (restSettings?.open_time && restSettings?.close_time) {
         setOpenTime(restSettings.open_time)
         setCloseTime(restSettings.close_time)
@@ -258,32 +212,23 @@ export default function MenuPage() {
       }
 
       if (restSettings?.latitude && restSettings?.longitude) {
-        setRestaurantLocation({
-          lat: parseFloat(restSettings.latitude),
-          lng: parseFloat(restSettings.longitude),
-        })
+        setRestaurantLocation({ lat: parseFloat(restSettings.latitude), lng: parseFloat(restSettings.longitude) })
       } else {
         setLocationStatus("allowed")
       }
 
-      // 5. Menu data
       setCategories(catData || [])
       setProducts(prodData || [])
       setLoading(false)
     }
-
     fetchMenu()
   }, [slug])
 
-  // ── Location check ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!restaurantLocation) return
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const d = getDistanceInMeters(
-          pos.coords.latitude, pos.coords.longitude,
-          restaurantLocation.lat, restaurantLocation.lng
-        )
+        const d = getDistanceInMeters(pos.coords.latitude, pos.coords.longitude, restaurantLocation.lat, restaurantLocation.lng)
         if (d <= 100) setLocationStatus("allowed")
         else { setLocationStatus("denied"); setLocationError(`You are ${Math.round(d)}m away from the restaurant.`) }
       },
@@ -291,7 +236,6 @@ export default function MenuPage() {
     )
   }, [restaurantLocation])
 
-  // ── Cart helpers ────────────────────────────────────────────────────────────
   const addToCart = (product: Product) => {
     setCart(prev => {
       const existing = prev.find(i => i.product.id === product.id)
@@ -302,26 +246,33 @@ export default function MenuPage() {
 
   const removeFromCart = (productId: string) => {
     setCart(prev =>
-      prev.map(i => i.product.id === productId ? { ...i, quantity: i.quantity - 1 } : i)
-          .filter(i => i.quantity > 0)
+      prev.map(i => i.product.id === productId ? { ...i, quantity: i.quantity - 1 } : i).filter(i => i.quantity > 0)
     )
   }
 
   const getQty = (productId: string) => cart.find(i => i.product.id === productId)?.quantity || 0
-  const totalAmount = cart.reduce((sum, i) => sum + i.product.price * i.quantity, 0)
-  const totalItems  = cart.reduce((sum, i) => sum + i.quantity, 0)
   const isValidName = (name: string) => /^[A-Za-z\s]{3,}$/.test(name.trim())
-
   const scrollCats = (dir: "left" | "right") => {
     catScrollRef.current?.scrollBy({ left: dir === "left" ? -200 : 200, behavior: "smooth" })
   }
 
-  // ── Place order ─────────────────────────────────────────────────────────────
+  // ── Totals with takeaway charge ─────────────────────────────────
+  const totalItems = cart.reduce((sum, i) => sum + i.quantity, 0)
+  const totalFood  = cart.reduce((sum, i) => sum + i.product.price * i.quantity, 0)
+
+  const totalTakeaway = orderType === "takeaway"
+    ? cart.reduce((sum, i) => {
+        const cat = categories.find(c => c.id === i.product.category_id)
+        return sum + (cat?.takeaway_charge ?? 0) * i.quantity
+      }, 0)
+    : 0
+
+  const totalAmount = totalFood + totalTakeaway
+
   const placeOrder = async () => {
     if (!customerName.trim()) { alert("Enter your name"); return }
     if (!isValidName(customerName)) { alert("Name must contain only letters, minimum 3 characters"); return }
     if (!orderType) { alert("Select dine-in or takeaway"); return }
-
     setPlacingOrder(true)
     try {
       const { data: order, error: orderError } = await supabase
@@ -331,8 +282,7 @@ export default function MenuPage() {
           customer_name: customerName.trim(), order_type: orderType,
           status: "pending", total_amount: totalAmount, total: totalAmount,
         })
-        .select("id")
-        .single()
+        .select("id").single()
 
       if (orderError || !order) throw new Error(orderError?.message || "Order failed")
 
@@ -345,10 +295,7 @@ export default function MenuPage() {
       if (itemError) throw new Error(itemError.message)
 
       setOrderSuccess(true)
-      setCart([])
-      setCustomerName("")
-      setOrderType("")
-      setCartOpen(false)
+      setCart([]); setCustomerName(""); setOrderType(""); setCartOpen(false)
       setTimeout(() => setOrderSuccess(false), 4000)
     } catch (err: any) {
       alert(err.message || "Something went wrong")
@@ -363,15 +310,11 @@ export default function MenuPage() {
     return catOk && searchOk
   })
 
-  // ── Guards ──────────────────────────────────────────────────────────────────
   if (loading) return <LoadingScreen message="Loading menu..." />
   if (restaurantOpen === false) return <ClosedScreen openTime={openTime} closeTime={closeTime} />
-  // Block the menu from showing at all until location is confirmed.
-  // "checking" means we're still waiting for the browser permission prompt + GPS response.
   if (locationStatus === "checking") return <LoadingScreen message="Verifying your location..." />
   if (locationStatus === "denied" || locationStatus === "error") return <LocationDeniedScreen message={locationError} />
 
-  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <>
       <style>{`
@@ -386,7 +329,6 @@ export default function MenuPage() {
         body { font-family: var(--font); background: var(--gray-bg); color: var(--text); }
         .hide-scroll { scrollbar-width: none; }
         .hide-scroll::-webkit-scrollbar { display: none; }
-
         .cat-pill {
           flex-shrink: 0; padding: 9px 20px; border-radius: 50px;
           border: 1.5px solid var(--border); background: #fff;
@@ -396,7 +338,6 @@ export default function MenuPage() {
         }
         .cat-pill:hover { border-color: var(--red); color: var(--red); }
         .cat-pill.active { background: var(--red); border-color: var(--red); color: #fff; }
-
         .cat-arrow {
           flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%;
           border: 1.5px solid var(--border); background: #fff;
@@ -405,14 +346,12 @@ export default function MenuPage() {
           transition: all 0.15s ease; box-shadow: 0 1px 4px rgba(0,0,0,0.08);
         }
         .cat-arrow:hover { border-color: var(--red); color: var(--red); background: var(--red-light); }
-
         .prod-card {
           background: #fff; border-radius: 16px; overflow: hidden;
           box-shadow: 0 1px 4px rgba(0,0,0,0.06);
           transition: transform 0.18s ease, box-shadow 0.18s ease;
         }
         .prod-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
-
         .add-btn {
           background: var(--red); color: #fff; border: none;
           border-radius: 50px; padding: 7px 16px; font-size: 13px;
@@ -420,7 +359,6 @@ export default function MenuPage() {
           transition: background 0.15s;
         }
         .add-btn:hover { background: var(--red-dark); }
-
         .qty-minus {
           width: 30px; height: 30px; border-radius: 50%;
           border: 1.5px solid var(--border); background: #fff;
@@ -437,7 +375,6 @@ export default function MenuPage() {
         }
         .qty-minus:hover { border-color: var(--red); color: var(--red); }
         .qty-plus:hover { background: var(--red-dark); }
-
         .name-input {
           width: 100%; padding: 13px 16px; border-radius: 12px;
           border: 1.5px solid var(--border); background: #f9f9f9;
@@ -445,7 +382,6 @@ export default function MenuPage() {
           transition: border-color 0.15s;
         }
         .name-input:focus { border-color: var(--red); background: #fff; }
-
         .ot-btn {
           flex: 1; padding: 11px; border-radius: 50px;
           border: 1.5px solid var(--border); background: #fff;
@@ -454,7 +390,6 @@ export default function MenuPage() {
         }
         .ot-btn:hover { border-color: var(--red); color: var(--red); }
         .ot-btn.active { background: var(--red); border-color: var(--red); color: #fff; }
-
         .place-btn {
           width: 100%; padding: 15px; border-radius: 50px;
           background: var(--red); color: #fff; border: none;
@@ -464,7 +399,6 @@ export default function MenuPage() {
         }
         .place-btn:not(:disabled):hover { background: var(--red-dark); }
         .place-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
         .cart-fab {
           display: none;
           position: fixed; bottom: 24px; right: 24px; z-index: 200;
@@ -505,7 +439,6 @@ export default function MenuPage() {
           width: 100%; font-family: var(--font); background: transparent;
         }
         .search-bar input::placeholder { color: #aaa; }
-
         @media (max-width: 768px) {
           .desktop-cart { display: none !important; }
           .cart-fab { display: flex !important; }
@@ -518,32 +451,21 @@ export default function MenuPage() {
         }
       `}</style>
 
-      {/* ── STICKY HEADER ── */}
       <header style={{
         position: "sticky", top: 0, zIndex: 100,
         background: "#fff", borderBottom: "1px solid var(--border)",
         padding: "0 20px", height: 56,
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
-        {/*
-          TOP LEFT — restaurant name from receipt_settings.restaurant_name
-          Owner sets this in: Settings → Receipt Settings → "Restaurant Name on Receipt"
-        */}
         <div style={{
           fontSize: 18, fontWeight: 800, letterSpacing: "-0.4px", color: "#111",
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60%",
         }}>
           {restaurantName}
         </div>
-
-        {/*
-          TOP RIGHT — MakeMenu app logo, hardcoded, identical for all restaurants.
-          Not fetched from DB. This is the platform branding.
-        */}
         <MakeMenuLogo />
       </header>
 
-      {/* ── HERO ── */}
       <div style={{ background: "var(--red)", padding: "28px 24px 56px", position: "relative", overflow: "hidden" }}>
         <svg style={{ position: "absolute", right: -20, top: -10, width: 320, height: 210, opacity: 0.1 }} viewBox="0 0 320 210" fill="none">
           <circle cx="60"  cy="60"  r="50" stroke="white" strokeWidth="1.5"/>
@@ -576,28 +498,15 @@ export default function MenuPage() {
         </div>
       </div>
 
-      {/* ── MAIN LAYOUT ── */}
       <div style={{ display: "flex", maxWidth: 1100, margin: "0 auto" }}>
-
-        {/* ── LEFT: Categories + Products ── */}
         <div style={{ flex: 1, padding: "20px 20px 60px", minWidth: 0 }}>
-
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "1.2px", color: "var(--muted)", marginBottom: 12 }}>
             BROWSE BY CATEGORY
           </div>
-
-          {/* Category row with scroll arrows */}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button className="cat-arrow" onClick={() => scrollCats("left")} aria-label="Scroll left">‹</button>
-            <div
-              ref={catScrollRef}
-              className="hide-scroll"
-              style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4, flex: 1 }}
-            >
-              <button
-                className={`cat-pill ${activeCategory === "all" ? "active" : ""}`}
-                onClick={() => setActiveCategory("all")}
-              >
+            <button className="cat-arrow" onClick={() => scrollCats("left")}>‹</button>
+            <div ref={catScrollRef} className="hide-scroll" style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4, flex: 1 }}>
+              <button className={`cat-pill ${activeCategory === "all" ? "active" : ""}`} onClick={() => setActiveCategory("all")}>
                 All items
               </button>
               {categories.map(cat => (
@@ -610,10 +519,9 @@ export default function MenuPage() {
                 </button>
               ))}
             </div>
-            <button className="cat-arrow" onClick={() => scrollCats("right")} aria-label="Scroll right">›</button>
+            <button className="cat-arrow" onClick={() => scrollCats("right")}>›</button>
           </div>
 
-          {/* Products grid */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14, marginTop: 20 }}>
             {filteredProducts.length === 0 && (
               <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "40px 0", color: "var(--muted)", fontSize: 14 }}>
@@ -626,8 +534,7 @@ export default function MenuPage() {
               return (
                 <div key={p.id} className="prod-card">
                   {p.image_url ? (
-                    <img src={p.image_url} alt={p.name}
-                      style={{ width: "100%", height: 130, objectFit: "cover", display: "block" }} />
+                    <img src={p.image_url} alt={p.name} style={{ width: "100%", height: 130, objectFit: "cover", display: "block" }} />
                   ) : (
                     <div style={{
                       width: "100%", height: 130,
@@ -648,11 +555,7 @@ export default function MenuPage() {
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <div style={{ fontSize: 14, fontWeight: 700 }}>₹{p.price}</div>
                       {!available ? (
-                        <button disabled style={{
-                          background: "#ddd", color: "#999", border: "none",
-                          borderRadius: 50, padding: "7px 14px", fontSize: 12,
-                          fontWeight: 700, cursor: "not-allowed",
-                        }}>Out</button>
+                        <button disabled style={{ background: "#ddd", color: "#999", border: "none", borderRadius: 50, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "not-allowed" }}>Out</button>
                       ) : qty > 0 ? (
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <button className="qty-minus" onClick={() => removeFromCart(p.id)}>−</button>
@@ -670,7 +573,6 @@ export default function MenuPage() {
           </div>
         </div>
 
-        {/* ── RIGHT: Order Panel (Desktop) ── */}
         <div className="desktop-cart" style={{
           width: 300, flexShrink: 0, position: "sticky", top: 56,
           height: "calc(100vh - 56px)", overflowY: "auto",
@@ -680,14 +582,13 @@ export default function MenuPage() {
           <OrderPanel
             cart={cart} customerName={customerName} setCustomerName={setCustomerName}
             orderType={orderType} setOrderType={setOrderType}
-            totalAmount={totalAmount} totalItems={totalItems}
+            totalFood={totalFood} totalTakeaway={totalTakeaway} totalAmount={totalAmount} totalItems={totalItems}
             addToCart={addToCart} removeFromCart={removeFromCart}
             placingOrder={placingOrder} placeOrder={placeOrder}
           />
         </div>
       </div>
 
-      {/* ── MOBILE FAB ── */}
       {totalItems > 0 && (
         <button className="cart-fab" onClick={() => setCartOpen(true)}>
           <span>🛍</span>
@@ -696,7 +597,6 @@ export default function MenuPage() {
         </button>
       )}
 
-      {/* ── MOBILE Drawer ── */}
       <div className={`drawer-overlay ${cartOpen ? "open" : ""}`} onClick={() => setCartOpen(false)} />
       <div className={`drawer ${cartOpen ? "open" : ""}`}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
@@ -710,7 +610,7 @@ export default function MenuPage() {
         <OrderPanel
           cart={cart} customerName={customerName} setCustomerName={setCustomerName}
           orderType={orderType} setOrderType={setOrderType}
-          totalAmount={totalAmount} totalItems={totalItems}
+          totalFood={totalFood} totalTakeaway={totalTakeaway} totalAmount={totalAmount} totalItems={totalItems}
           addToCart={addToCart} removeFromCart={removeFromCart}
           placingOrder={placingOrder} placeOrder={placeOrder}
           hideTitle
@@ -722,16 +622,18 @@ export default function MenuPage() {
   )
 }
 
-// ── Order Panel ───────────────────────────────────────────────────────────────
 function OrderPanel({
   cart, customerName, setCustomerName, orderType, setOrderType,
-  totalAmount, totalItems, addToCart, removeFromCart, placingOrder, placeOrder, hideTitle,
+  totalFood, totalTakeaway, totalAmount, totalItems,
+  addToCart, removeFromCart, placingOrder, placeOrder, hideTitle,
 }: {
   cart: CartItem[]
   customerName: string
   setCustomerName: (v: string) => void
   orderType: "dine_in" | "takeaway" | ""
   setOrderType: (v: "dine_in" | "takeaway") => void
+  totalFood: number
+  totalTakeaway: number
   totalAmount: number
   totalItems: number
   addToCart: (p: Product) => void
@@ -765,8 +667,7 @@ function OrderPanel({
               display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22,
             }}>
               {item.product.image_url
-                ? <img src={item.product.image_url} alt={item.product.name}
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ? <img src={item.product.image_url} alt={item.product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 : "🍽️"}
             </div>
             <div style={{ flex: 1 }}>
@@ -806,9 +707,25 @@ function OrderPanel({
         <button className={`ot-btn ${orderType === "takeaway" ? "active" : ""}`} onClick={() => setOrderType("takeaway")}>Take away</button>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <span style={{ fontSize: 15, fontWeight: 700 }}>Total</span>
-        <span style={{ fontSize: 18, fontWeight: 800 }}>₹{totalAmount}</span>
+      {/* ── Totals breakdown ── */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#888", marginBottom: 6 }}>
+          <span>Subtotal</span>
+          <span>₹{totalFood}</span>
+        </div>
+        {totalTakeaway > 0 && (
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#E8192C", marginBottom: 6 }}>
+            <span>Takeaway charges</span>
+            <span>+₹{totalTakeaway}</span>
+          </div>
+        )}
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          borderTop: "1px solid var(--border)", paddingTop: 10, marginTop: 4,
+        }}>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>Total</span>
+          <span style={{ fontSize: 18, fontWeight: 800 }}>₹{totalAmount}</span>
+        </div>
       </div>
 
       <button className="place-btn" disabled={placingOrder || cart.length === 0} onClick={placeOrder}>

@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useState, useRef, useCallback } from "react"
+import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabaseClient"
 
-type Category = { id: string; name: string }
+type Category = { id: string; name: string; takeaway_charge?: number }
 
 type Product = {
   id: string
@@ -16,7 +16,6 @@ type Product = {
   is_available?: boolean
 }
 
-// ─── How many category pills to show at once per breakpoint ───
 const ITEMS_DESKTOP = 6
 const ITEMS_TABLET  = 4
 const ITEMS_MOBILE  = 2
@@ -36,13 +35,11 @@ function useItemsPerPage() {
   return items
 }
 
-// ─── Toast ────────────────────────────────────────────────────────────────────
 function Toast({ message, onClose }: { message: string; onClose: () => void }) {
   useEffect(() => {
     const t = setTimeout(onClose, 2500)
     return () => clearTimeout(t)
   }, [onClose])
-
   return (
     <>
       <style>{`
@@ -51,68 +48,38 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
           to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
-      <div
-        style={{
-          position: "fixed",
-          top: 24,
-          right: 24,
-          zIndex: 9999,
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          background: "#fff",
-          border: "1.5px solid #EBEBEB",
-          borderLeft: "4px solid #EF233C",
-          borderRadius: 12,
-          padding: "12px 18px",
-          boxShadow: "0 8px 28px rgba(0,0,0,0.10)",
-          fontFamily: "'DM Sans', -apple-system, sans-serif",
-          fontSize: 14,
-          fontWeight: 600,
-          color: "#111",
-          animation: "toastIn 0.2s ease",
-          minWidth: 220,
-        }}
-      >
-        {/* brand-red checkmark */}
+      <div style={{
+        position: "fixed", top: 24, right: 24, zIndex: 9999,
+        display: "flex", alignItems: "center", gap: 10,
+        background: "#fff", border: "1.5px solid #EBEBEB",
+        borderLeft: "4px solid #EF233C", borderRadius: 12,
+        padding: "12px 18px", boxShadow: "0 8px 28px rgba(0,0,0,0.10)",
+        fontFamily: "'DM Sans', -apple-system, sans-serif",
+        fontSize: 14, fontWeight: 600, color: "#111",
+        animation: "toastIn 0.2s ease", minWidth: 220,
+      }}>
         <div style={{
-          width: 26, height: 26, borderRadius: "50%",
-          background: "#FFF1F2", display: "flex",
-          alignItems: "center", justifyContent: "center", flexShrink: 0,
+          width: 26, height: 26, borderRadius: "50%", background: "#FFF1F2",
+          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
         }}>
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
             <path d="M2 7l4 4 6-7" stroke="#EF233C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
-
         {message}
-
-        <button
-          onClick={onClose}
-          style={{
-            marginLeft: "auto", background: "none", border: "none",
-            cursor: "pointer", color: "#aaa", fontSize: 16,
-            lineHeight: 1, padding: "0 0 0 8px",
-          }}
-        >
-          ×
-        </button>
+        <button onClick={onClose} style={{
+          marginLeft: "auto", background: "none", border: "none",
+          cursor: "pointer", color: "#aaa", fontSize: 16, lineHeight: 1, padding: "0 0 0 8px",
+        }}>×</button>
       </div>
     </>
   )
 }
 
-// ─── Category Pager Component ─────────────────────────────────────────────────
 function CategoryPager({
-  categories,
-  activeCategory,
-  onSelect,
-  onEdit,
-  onDelete,
-  editingCategoryId,
-  editingCategoryName,
-  setEditingCategoryName,
-  onUpdateCategory,
+  categories, activeCategory, onSelect, onEdit, onDelete,
+  editingCategoryId, editingCategoryName, setEditingCategoryName,
+  editingTakeawayCharge, setEditingTakeawayCharge, onUpdateCategory,
 }: {
   categories: Category[]
   activeCategory: string
@@ -122,43 +89,27 @@ function CategoryPager({
   editingCategoryId: string | null
   editingCategoryName: string
   setEditingCategoryName: (v: string) => void
+  editingTakeawayCharge: string
+  setEditingTakeawayCharge: (v: string) => void
   onUpdateCategory: (id: string) => void
 }) {
   const itemsPerPage = useItemsPerPage()
   const [page, setPage] = useState(0)
-
   const totalPages = Math.ceil(categories.length / itemsPerPage)
   const canPrev = page > 0
   const canNext = page < totalPages - 1
 
   useEffect(() => { setPage(0) }, [categories.length, itemsPerPage])
 
-  const visibleCategories = categories.slice(
-    page * itemsPerPage,
-    page * itemsPerPage + itemsPerPage
-  )
+  const visibleCategories = categories.slice(page * itemsPerPage, page * itemsPerPage + itemsPerPage)
 
   return (
     <div className="flex items-center gap-2 border-b pb-3 select-none">
-
-      {/* LEFT ARROW */}
       <button
         onClick={() => canPrev && setPage(p => p - 1)}
-        aria-label="Previous categories"
-        className={`
-          flex-shrink-0 w-8 h-8 rounded-full border bg-white
-          flex items-center justify-center text-xl leading-none
-          transition-all duration-150
-          ${canPrev
-            ? "border-gray-300 text-gray-600 hover:bg-gray-100 cursor-pointer"
-            : "border-gray-200 text-gray-300 cursor-not-allowed opacity-40"
-          }
-        `}
-      >
-        ‹
-      </button>
+        className={`flex-shrink-0 w-8 h-8 rounded-full border bg-white flex items-center justify-center text-xl leading-none transition-all duration-150 ${canPrev ? "border-gray-300 text-gray-600 hover:bg-gray-100 cursor-pointer" : "border-gray-200 text-gray-300 cursor-not-allowed opacity-40"}`}
+      >‹</button>
 
-      {/* VISIBLE PILLS */}
       <div className="flex-1 flex gap-2 min-w-0">
         {visibleCategories.map(c => (
           <div
@@ -167,28 +118,40 @@ function CategoryPager({
             style={{ flex: `0 0 calc(${100 / itemsPerPage}% - ${(itemsPerPage - 1) * 8 / itemsPerPage}px)` }}
           >
             {editingCategoryId === c.id ? (
-              <input
-                value={editingCategoryName}
-                onChange={e => setEditingCategoryName(e.target.value)}
-                onBlur={() => onUpdateCategory(c.id)}
-                onKeyDown={e => e.key === "Enter" && onUpdateCategory(c.id)}
-                className="border px-2 py-1 rounded text-sm w-full"
-                autoFocus
-              />
+              <div className="flex flex-col gap-1 w-full">
+                <input
+                  value={editingCategoryName}
+                  onChange={e => setEditingCategoryName(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && onUpdateCategory(c.id)}
+                  className="border px-2 py-1 rounded text-sm w-full"
+                  placeholder="Category name"
+                  autoFocus
+                />
+                <input
+                  type="number"
+                  value={editingTakeawayCharge}
+                  onChange={e => setEditingTakeawayCharge(e.target.value)}
+                  onBlur={() => onUpdateCategory(c.id)}
+                  onKeyDown={e => e.key === "Enter" && onUpdateCategory(c.id)}
+                  className="border px-2 py-1 rounded text-sm w-full"
+                  placeholder="Takeaway ₹/item"
+                  min="0"
+                />
+              </div>
             ) : (
-              <button
-                onClick={() => onSelect(c.id)}
-                className={`
-                  w-full py-1.5 rounded-full border text-sm font-medium whitespace-nowrap
-                  transition-all duration-150 truncate
-                  ${activeCategory === c.id
-                    ? "bg-red-500 text-white border-red-500"
-                    : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-500"
-                  }
-                `}
-              >
-                {c.name}
-              </button>
+              <div className="w-full">
+                <button
+                  onClick={() => onSelect(c.id)}
+                  className={`w-full py-1.5 rounded-full border text-sm font-medium whitespace-nowrap transition-all duration-150 truncate ${activeCategory === c.id ? "bg-red-500 text-white border-red-500" : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:text-red-500"}`}
+                >
+                  {c.name}
+                </button>
+                {(c.takeaway_charge ?? 0) > 0 && (
+                  <div className="text-center text-xs text-gray-400 mt-0.5">
+                    +₹{c.takeaway_charge}/item takeaway
+                  </div>
+                )}
+              </div>
             )}
             <button onClick={() => onEdit(c)} className="opacity-40 hover:opacity-100 flex-shrink-0">
               <img src="/icons/edit.png" className="w-4 h-4" />
@@ -198,93 +161,72 @@ function CategoryPager({
             </button>
           </div>
         ))}
-
-        {/* Empty placeholder slots */}
         {Array.from({ length: itemsPerPage - visibleCategories.length }).map((_, i) => (
-          <div
-            key={`empty-${i}`}
-            style={{ flex: `0 0 calc(${100 / itemsPerPage}% - ${(itemsPerPage - 1) * 8 / itemsPerPage}px)` }}
-          />
+          <div key={`empty-${i}`} style={{ flex: `0 0 calc(${100 / itemsPerPage}% - ${(itemsPerPage - 1) * 8 / itemsPerPage}px)` }} />
         ))}
       </div>
 
-      {/* RIGHT ARROW */}
       <button
         onClick={() => canNext && setPage(p => p + 1)}
-        aria-label="Next categories"
-        className={`
-          flex-shrink-0 w-8 h-8 rounded-full border bg-white
-          flex items-center justify-center text-xl leading-none
-          transition-all duration-150
-          ${canNext
-            ? "border-gray-300 text-gray-600 hover:bg-gray-100 cursor-pointer"
-            : "border-gray-200 text-gray-300 cursor-not-allowed opacity-40"
-          }
-        `}
-      >
-        ›
-      </button>
+        className={`flex-shrink-0 w-8 h-8 rounded-full border bg-white flex items-center justify-center text-xl leading-none transition-all duration-150 ${canNext ? "border-gray-300 text-gray-600 hover:bg-gray-100 cursor-pointer" : "border-gray-200 text-gray-300 cursor-not-allowed opacity-40"}`}
+      >›</button>
     </div>
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ProductsPage() {
-  const [categories, setCategories]                   = useState<Category[]>([])
-  const [products, setProducts]                       = useState<Product[]>([])
-  const [categoryName, setCategoryName]               = useState("")
-  const [productName, setProductName]                 = useState("")
-  const [description, setDescription]                 = useState("")
-  const [price, setPrice]                             = useState("")
-  const [selectedCategory, setSelectedCategory]       = useState("")
-  const [type, setType]                               = useState<"veg" | "non-veg" | "">("")
-  const [imageFile, setImageFile]                     = useState<File | null>(null)
-  const [editingCategoryId, setEditingCategoryId]     = useState<string | null>(null)
-  const [editingCategoryName, setEditingCategoryName] = useState("")
-  const [activeCategory, setActiveCategory]           = useState("")
-  const [editingProduct, setEditingProduct]           = useState<Product | null>(null)
-  const [newImage, setNewImage]                       = useState<File | null>(null)
-  const [preview, setPreview]                         = useState("")
+  const [categories, setCategories]                       = useState<Category[]>([])
+  const [products, setProducts]                           = useState<Product[]>([])
+  const [categoryName, setCategoryName]                   = useState("")
+  const [takeawayCharge, setTakeawayCharge]               = useState("")
+  const [productName, setProductName]                     = useState("")
+  const [description, setDescription]                     = useState("")
+  const [price, setPrice]                                 = useState("")
+  const [selectedCategory, setSelectedCategory]           = useState("")
+  const [type, setType]                                   = useState<"veg" | "non-veg" | "">("")
+  const [imageFile, setImageFile]                         = useState<File | null>(null)
+  const [editingCategoryId, setEditingCategoryId]         = useState<string | null>(null)
+  const [editingCategoryName, setEditingCategoryName]     = useState("")
+  const [editingTakeawayCharge, setEditingTakeawayCharge] = useState("")
+  const [activeCategory, setActiveCategory]               = useState("")
+  const [editingProduct, setEditingProduct]               = useState<Product | null>(null)
+  const [newImage, setNewImage]                           = useState<File | null>(null)
+  const [preview, setPreview]                             = useState("")
+  const [toast, setToast]                                 = useState("")
 
-  // ── Toast state ────────────────────────────────────────────────
-  const [toast, setToast] = useState("")
+  const showToast = (msg: string) => setToast(msg)
 
-  const showToast = (msg: string) => {
-    setToast(msg)
-  }
-
-  // ── FETCH ──────────────────────────────────────────────────────
   const fetchData = async () => {
     const { data: sessionData } = await supabase.auth.getSession()
     const user = sessionData.session?.user
     if (!user) return
-
     const { data: catData }  = await supabase.from("categories").select("*").eq("user_id", user.id)
     const { data: prodData } = await supabase.from("products").select("*").eq("user_id", user.id)
-
     const safeProducts = (prodData || []).map(p => ({
-      ...p,
-      description: p.description || "",
-      image_url: p.image_url || null,
+      ...p, description: p.description || "", image_url: p.image_url || null,
     }))
-
     setCategories(catData || [])
     setProducts(safeProducts)
-    if (catData?.length) setActiveCategory(catData[0].id)
+    if (catData?.length) setActiveCategory(prev => prev || catData[0].id)
   }
 
   useEffect(() => { fetchData() }, [])
 
-  // ── CATEGORY CRUD ──────────────────────────────────────────────
   const addCategory = async () => {
     if (!categoryName.trim()) return alert("Enter category name")
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return alert("Not logged in")
-    const { error } = await supabase.from("categories").insert({ user_id: session.user.id, name: categoryName })
+    const { error } = await supabase.from("categories").insert({
+      user_id: session.user.id,
+      name: categoryName,
+      takeaway_charge: Number(takeawayCharge) || 0,
+    })
     if (error) return alert(error.message)
+    const added = categoryName.trim()
     setCategoryName("")
+    setTakeawayCharge("")
     fetchData()
-    showToast(`Category "${categoryName.trim()}" created!`)
+    showToast(`Category "${added}" created!`)
   }
 
   const deleteCategory = async (id: string) => {
@@ -299,14 +241,19 @@ export default function ProductsPage() {
     if (!editingCategoryName.trim()) return
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const { error } = await supabase.from("categories").update({ name: editingCategoryName }).eq("id", id).eq("user_id", session.user.id)
+    const { error } = await supabase.from("categories")
+      .update({
+        name: editingCategoryName,
+        takeaway_charge: Number(editingTakeawayCharge) || 0,
+      })
+      .eq("id", id).eq("user_id", session.user.id)
     if (error) return alert(error.message)
     setEditingCategoryId(null)
     setEditingCategoryName("")
+    setEditingTakeawayCharge("")
     fetchData()
   }
 
-  // ── IMAGE ──────────────────────────────────────────────────────
   const uploadImage = async (file: File) => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return null
@@ -322,7 +269,6 @@ export default function ProductsPage() {
     setPreview(URL.createObjectURL(file))
   }
 
-  // ── PRODUCT CRUD ───────────────────────────────────────────────
   const addProduct = async () => {
     if (!productName || !price || !selectedCategory || !type) return alert("Fill all fields")
     const { data: { session } } = await supabase.auth.getSession()
@@ -375,25 +321,33 @@ export default function ProductsPage() {
 
   return (
     <div className="bg-gray-100 min-h-screen p-4 space-y-6">
-
-      {/* ── Themed top-right toast ── */}
       {toast && <Toast message={toast} onClose={() => setToast("")} />}
-
       <h2 className="text-xl font-semibold">Add item and categories</h2>
 
-      {/* FORM */}
       <div className="grid md:grid-cols-2 gap-4">
         <div className="bg-white p-4 rounded-xl space-y-3">
           <input
-            placeholder="Category"
+            placeholder="Category name"
             value={categoryName}
             onChange={e => setCategoryName(e.target.value)}
             onKeyDown={e => e.key === "Enter" && addCategory()}
             className="w-full border px-3 py-2 rounded-full"
           />
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">₹</span>
+            <input
+              type="number"
+              placeholder="Takeaway charge per item (0 = none)"
+              value={takeawayCharge}
+              onChange={e => setTakeawayCharge(e.target.value)}
+              min="0"
+              className="w-full border pl-7 pr-3 py-2 rounded-full text-sm"
+            />
+          </div>
           <button onClick={addCategory} className="bg-red-500 text-white px-4 py-2 rounded-full">
             Add category
           </button>
+
           <input
             placeholder="Product name"
             value={productName}
@@ -422,26 +376,20 @@ export default function ProductsPage() {
             className="w-full border px-3 py-2 rounded-full"
           />
           <div className="flex gap-2">
-            <button
-              onClick={() => setType("veg")}
-              className={type === "veg" ? "bg-green-500 text-white px-3 py-1 rounded" : "bg-gray-200 px-3 py-1 rounded"}
-            >
-              Veg
-            </button>
-            <button
-              onClick={() => setType("non-veg")}
-              className={type === "non-veg" ? "bg-red-500 text-white px-3 py-1 rounded" : "bg-gray-200 px-3 py-1 rounded"}
-            >
-              Non-veg
-            </button>
+            <button onClick={() => setType("veg")} className={type === "veg" ? "bg-green-500 text-white px-3 py-1 rounded" : "bg-gray-200 px-3 py-1 rounded"}>Veg</button>
+            <button onClick={() => setType("non-veg")} className={type === "non-veg" ? "bg-red-500 text-white px-3 py-1 rounded" : "bg-gray-200 px-3 py-1 rounded"}>Non-veg</button>
           </div>
           <select
             value={selectedCategory}
             onChange={e => setSelectedCategory(e.target.value)}
             className="w-full border px-3 py-2 rounded-full"
           >
-            <option value="">Choose</option>
-            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <option value="">Choose category</option>
+            {categories.map(c => (
+              <option key={c.id} value={c.id}>
+                {c.name}{(c.takeaway_charge ?? 0) > 0 ? ` (+₹${c.takeaway_charge}/item takeaway)` : ""}
+              </option>
+            ))}
           </select>
           <button onClick={addProduct} className="bg-red-500 text-white w-full py-2 rounded-full">
             Add item
@@ -449,20 +397,24 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {/* ── CATEGORY PAGER ── */}
       <CategoryPager
         categories={categories}
         activeCategory={activeCategory}
         onSelect={setActiveCategory}
-        onEdit={c => { setEditingCategoryId(c.id); setEditingCategoryName(c.name) }}
+        onEdit={c => {
+          setEditingCategoryId(c.id)
+          setEditingCategoryName(c.name)
+          setEditingTakeawayCharge(String(c.takeaway_charge ?? 0))
+        }}
         onDelete={deleteCategory}
         editingCategoryId={editingCategoryId}
         editingCategoryName={editingCategoryName}
         setEditingCategoryName={setEditingCategoryName}
+        editingTakeawayCharge={editingTakeawayCharge}
+        setEditingTakeawayCharge={setEditingTakeawayCharge}
         onUpdateCategory={updateCategory}
       />
 
-      {/* PRODUCTS */}
       <div className="grid md:grid-cols-3 gap-4">
         {filtered.map(p => (
           <div key={p.id} className="bg-white p-3 rounded-xl space-y-2">
@@ -501,7 +453,6 @@ export default function ProductsPage() {
         ))}
       </div>
 
-      {/* EDIT MODAL */}
       {editingProduct && (
         <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
           <div className="bg-white p-6 rounded-xl w-[90%] max-w-md space-y-3">
@@ -534,7 +485,6 @@ export default function ProductsPage() {
           </div>
         </div>
       )}
-
     </div>
   )
 }
