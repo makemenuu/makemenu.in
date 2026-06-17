@@ -108,10 +108,12 @@ function drawCardBase(
   ctx.fillStyle = dark ? "#fff" : o.accent; ctx.font = f.caption; ctx.textAlign = "center"
   ctx.fillText(o.caption, W / 2, by + 10*s)
   if (o.tagline) { ctx.fillStyle = sub; ctx.font = f.tag; ctx.fillText(o.tagline, W / 2, by + 32*s) }
-  ctx.strokeStyle = bdr; ctx.lineWidth = s
-  ctx.beginPath(); ctx.moveTo(40*s, by + 50*s); ctx.lineTo(W - 40*s, by + 50*s); ctx.stroke()
-  ctx.fillStyle = dark ? "rgba(255,255,255,.3)" : "#aaa"; ctx.font = f.url
-  ctx.fillText(o.url, W / 2, by + 68*s)
+  ctx.strokeStyle = bdr
+  ctx.lineWidth = s
+  ctx.beginPath()
+  ctx.moveTo(40*s, by + 50*s)
+  ctx.lineTo(W - 40*s, by + 50*s)
+  ctx.stroke()
 
   return (qrImg: HTMLImageElement) => {
     ctx.drawImage(qrImg, qrX, qrY, qrSz, qrSz)
