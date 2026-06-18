@@ -114,7 +114,7 @@ function CategoryPager({
         {visibleCategories.map(c => (
           <div
             key={c.id}
-            className="flex items-center gap-1"
+            className="flex flex-col items-center gap-1"
             style={{ flex: `0 0 calc(${100 / itemsPerPage}% - ${(itemsPerPage - 1) * 8 / itemsPerPage}px)` }}
           >
             {editingCategoryId === c.id ? (
@@ -153,12 +153,15 @@ function CategoryPager({
                 )}
               </div>
             )}
-            <button onClick={() => onEdit(c)} className="opacity-40 hover:opacity-100 flex-shrink-0">
-              <img src="/icons/edit.png" className="w-4 h-4" />
-            </button>
-            <button onClick={() => onDelete(c.id)} className="opacity-40 hover:opacity-100 flex-shrink-0">
-              <img src="/icons/delete.png" className="w-4 h-4" />
-            </button>
+              <div className="flex justify-center gap-2 mt-1">
+      <button onClick={() => onEdit(c)}>
+        <img src="/icons/edit.png" className="w-4 h-4" />
+      </button>
+
+      <button onClick={() => onDelete(c.id)}>
+        <img src="/icons/delete.png" className="w-4 h-4" />
+      </button>
+</div>
           </div>
         ))}
         {Array.from({ length: itemsPerPage - visibleCategories.length }).map((_, i) => (
@@ -334,16 +337,19 @@ export default function ProductsPage() {
             className="w-full border px-3 py-2 rounded-full"
           />
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">₹</span>
-            <input
-              type="number"
-              placeholder="Takeaway charge per item (0 = none)"
-              value={takeawayCharge}
-              onChange={e => setTakeawayCharge(e.target.value)}
-              min="0"
-              className="w-full border pl-7 pr-3 py-2 rounded-full text-sm"
-            />
-          </div>
+  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500">
+  ₹
+  </span>
+
+  <input
+    type="text"
+    inputMode="numeric"
+    value={takeawayCharge}
+    onChange={(e) => setTakeawayCharge(e.target.value)}
+    placeholder="Takeaway charge (₹/item)"
+    className="w-full border rounded-full pl-10 pr-4 py-2"
+  />
+</div>
           <button onClick={addCategory} className="bg-red-500 text-white px-4 py-2 rounded-full">
             Add category
           </button>
@@ -436,7 +442,15 @@ export default function ProductsPage() {
             </div>
             <div>
               <h4 className="font-semibold">{p.name}</h4>
-              <p className="text-sm text-gray-500">{p.description}</p>
+              <p
+  className="text-sm text-gray-500 break-words line-clamp-2"
+  style={{
+    overflowWrap: "break-word",
+    wordBreak: "break-word"
+  }}
+>
+  {p.description}
+</p>
               <div className="flex justify-between items-center mt-1">
                 ₹{p.price}
                 <div className="flex gap-2">

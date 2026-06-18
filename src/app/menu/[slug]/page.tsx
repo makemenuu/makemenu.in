@@ -175,6 +175,8 @@ export default function MenuPage() {
   const [activeCategory, setActiveCategory]     = useState<string>("all")
   const [searchQuery, setSearchQuery]           = useState("")
   const [cartOpen, setCartOpen]                 = useState(false)
+  const [expandedDesc, setExpandedDesc] = useState<Record<string, boolean>>({})
+  const toggleDesc = (id: string) =>setExpandedDesc(prev => ({ ...prev, [id]: !prev[id] }))
 
   const catScrollRef = useRef<HTMLDivElement>(null)
   const greeting = getGreeting()
@@ -532,7 +534,15 @@ export default function MenuPage() {
               const qty = getQty(p.id)
               const available = p.is_available !== false
               return (
-                <div key={p.id} className="prod-card">
+                <div
+                      key={p.id}
+                      className="prod-card"
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        height: "100%",
+                      }}
+                    >
                   {p.image_url ? (
                     <img src={p.image_url} alt={p.name} style={{ width: "100%", height: 130, objectFit: "cover", display: "block" }} />
                   ) : (
@@ -542,17 +552,56 @@ export default function MenuPage() {
                       display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40,
                     }}>🍽️</div>
                   )}
-                  <div style={{ padding: "12px" }}>
+                  <div
+  style={{
+    padding: "12px",
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
+  }}
+>
                     <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 2 }}>{p.name}</div>
                     {p.description && (
-                      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8, lineHeight: 1.4 }}>
-                        {p.description}
-                      </div>
-                    )}
+  <div style={{ marginBottom: 8 }}>
+    <div
+      style={{
+        fontSize: 12,
+        color: "var(--muted)",
+        lineHeight: 1.4,
+        wordBreak: "break-word",
+        overflow: "hidden",
+        display: "-webkit-box",
+        WebkitLineClamp: expandedDesc[p.id] ? 999 : 2,
+        WebkitBoxOrient: "vertical",
+      }}
+    >
+      {p.description}
+    </div>
+    {p.description.length > 60 && (
+      <button
+        onClick={e => { e.stopPropagation(); toggleDesc(p.id) }}
+        style={{
+          background: "none", border: "none", padding: 0,
+          fontSize: 11, fontWeight: 700, color: "var(--red)",
+          cursor: "pointer", fontFamily: "var(--font)", marginTop: 2,
+        }}
+      >
+        {expandedDesc[p.id] ? "less ▲" : "more ▼"}
+      </button>
+    )}
+  </div>
+)}
                     {!available && (
                       <div style={{ fontSize: 11, fontWeight: 700, color: "var(--red)", marginBottom: 6 }}>Out of stock</div>
                     )}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            marginTop: "auto",
+                          }}
+                        >
                       <div style={{ fontSize: 14, fontWeight: 700 }}>₹{p.price}</div>
                       {!available ? (
                         <button disabled style={{ background: "#ddd", color: "#999", border: "none", borderRadius: 50, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "not-allowed" }}>Out</button>
@@ -589,8 +638,8 @@ export default function MenuPage() {
         </div>
       </div>
 
-      {totalItems > 0 && (
-        <button className="cart-fab" onClick={() => setCartOpen(true)}>
+{totalItems > 0 && !cartOpen && (
+  <button className="cart-fab" onClick={() => setCartOpen(true)}>
           <span>🛍</span>
           <span>{totalItems} {totalItems === 1 ? "item" : "items"} · ₹{totalAmount}</span>
           <span style={{ marginLeft: 4 }}>›</span>
