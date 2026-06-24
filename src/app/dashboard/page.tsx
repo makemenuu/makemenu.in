@@ -396,7 +396,7 @@ export default function DashboardPage() {
                         </span>
                       </div>
 
-                      {/* Addon details — rendered only when addons exist */}
+                      {/* Addon details */}
                       {Array.isArray(item.addons) && item.addons.length > 0 && (
                         <div className="mt-1 ml-4 space-y-1">
                           {item.addons.map((group: any, gi: number) => (
@@ -421,6 +421,17 @@ export default function DashboardPage() {
                               </div>
                             )
                           ))}
+                        </div>
+                      )}
+
+                      {/* Cooking note — highlighted row */}
+                      {item.cooking_note && (
+                        <div className="mt-2 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                          <span className="text-base leading-none mt-0.5">📝</span>
+                          <div>
+                            <span className="text-xs font-bold text-amber-700 uppercase tracking-wide">Cooking request: </span>
+                            <span className="text-xs font-semibold text-amber-800">{item.cooking_note}</span>
+                          </div>
                         </div>
                       )}
                     </div>
