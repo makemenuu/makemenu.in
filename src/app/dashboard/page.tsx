@@ -18,126 +18,106 @@ export default function DashboardPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   // ================= FETCH =================
-const fetchData = async () => {
-  setLoading(true)
+  const fetchData = async () => {
+    setLoading(true)
 
-  const { data: orderData } = await supabase
-    .from("orders")
-    .select(`
-      *,
-      qr_codes ( name )
-    `)
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
+    const { data: orderData } = await supabase
+      .from("orders")
+      .select(`*, qr_codes ( name )`)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
 
-  // ✅ FILTER TODAY HERE
-  const today = new Date().toISOString().split("T")[0]
-
-  const todayOrders = (orderData || []).filter(order =>
-    order.created_at.startsWith(today)
-  )
-
-  const orderIds = todayOrders.map(o => o.id)
-
-  const { data: itemData } = await supabase
-    .from("order_items")
-    .select("*")
-    .in("order_id", orderIds)
-
-
-  // ✅ IMPORTANT — SET FILTERED DATA
-  setOrders(todayOrders)
-  setItems(itemData || [])
-  setLoading(false)
-}
-
-  useEffect(() => {
-  const getUser = async () => {
-    const { data } = await supabase.auth.getUser()
-    setUserId(data.user?.id || null)
-  }
-
-  getUser()
-}, [])
-
-  useEffect(() => {
-  if (!userId) return
-
-  fetchData()
-
-  audioRef.current = new Audio("/sounds/order.mp3")
-
-  const channel = supabase
-    .channel("orders")
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "orders",
-        filter: `user_id=eq.${userId}`, // ✅ ONLY THIS CHANGE
-      },
-      async (payload) => {
-        const newOrder = payload.new
-
-        audioRef.current?.play().catch(() => {})
-        setOrders(prev => [newOrder, ...prev])
-
-        const { data } = await supabase
-          .from("order_items")
-          .select("*")
-          .eq("order_id", newOrder.id)
-
-        if (data) setItems(prev => [...prev, ...data])
-      }
+    const today = new Date().toISOString().split("T")[0]
+    const todayOrders = (orderData || []).filter(order =>
+      order.created_at.startsWith(today)
     )
-    .subscribe()
 
-  return () => {
-    supabase.removeChannel(channel)
+    const orderIds = todayOrders.map(o => o.id)
+
+    const { data: itemData } = await supabase
+      .from("order_items")
+      .select("*")          // ← addons JSONB column is included automatically
+      .in("order_id", orderIds)
+
+    setOrders(todayOrders)
+    setItems(itemData || [])
+    setLoading(false)
   }
-}, [userId])
+
+  useEffect(() => {
+    const getUser = async () => {
+      const { data } = await supabase.auth.getUser()
+      setUserId(data.user?.id || null)
+    }
+    getUser()
+  }, [])
+
+  useEffect(() => {
+    if (!userId) return
+
+    fetchData()
+
+    audioRef.current = new Audio("/sounds/order.mp3")
+
+    const channel = supabase
+      .channel("orders")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "orders",
+          filter: `user_id=eq.${userId}`,
+        },
+        async (payload) => {
+          const newOrder = payload.new
+
+          audioRef.current?.play().catch(() => {})
+          setOrders(prev => [newOrder, ...prev])
+
+          const { data } = await supabase
+            .from("order_items")
+            .select("*")       // ← addons JSONB included here too
+            .eq("order_id", newOrder.id)
+
+          if (data) setItems(prev => [...prev, ...data])
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [userId])
 
   // ================= ACTIONS =================
   const updateStatus = async (id: string, status: string) => {
-  await supabase.from("orders").update({ status }).eq("id", id)
-
-  setOrders(prev =>
-    prev.map(o => (o.id === id ? { ...o, status } : o))
-  )
-}
+    await supabase.from("orders").update({ status }).eq("id", id)
+    setOrders(prev => prev.map(o => (o.id === id ? { ...o, status } : o)))
+  }
 
   const printBill = (id: string) => {
     window.open(`/receipt/${id}`, "_blank")
   }
 
   const deleteOrder = (id: string) => {
-  setDeleteOrderId(id)
-}
+    setDeleteOrderId(id)
+  }
 
   const confirmDeleteOrder = async () => {
-  if (!deleteOrderId) return
+    if (!deleteOrderId) return
 
-  await supabase
-    .from("orders")
-    .update({
-      is_deleted: true,
-      deleted_at: new Date().toISOString(),
-    })
-    .eq("id", deleteOrderId)
+    await supabase
+      .from("orders")
+      .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+      .eq("id", deleteOrderId)
 
-  setOrders(prev =>
-    prev.map(o =>
-      o.id === deleteOrderId
-        ? { ...o, is_deleted: true }
-        : o
+    setOrders(prev =>
+      prev.map(o => o.id === deleteOrderId ? { ...o, is_deleted: true } : o)
     )
-  )
 
-
-
-  setDeleteOrderId(null)
-}
+    setDeleteOrderId(null)
+  }
 
   const startEdit = (order: any) => {
     setEditingOrder({
@@ -153,26 +133,19 @@ const fetchData = async () => {
 
     const originalItems = items.filter(i => i.order_id === editingOrder.id)
     const editedIds = editingOrder.editedItems.map((i: any) => i.id)
-
-    // Find deleted items (in original but not in editedItems)
     const deletedItems = originalItems.filter(i => !editedIds.includes(i.id))
 
-    // Delete removed items from Supabase
     await Promise.all(
       deletedItems.map((item: any) =>
         supabase.from("order_items").delete().eq("id", item.id)
       )
     )
 
-    // Update remaining items
     await Promise.all(
       editingOrder.editedItems.map((item: any) =>
         supabase
           .from("order_items")
-          .update({
-            product_name: item.product_name,
-            quantity: item.quantity,
-          })
+          .update({ product_name: item.product_name, quantity: item.quantity })
           .eq("id", item.id)
       )
     )
@@ -187,7 +160,6 @@ const fetchData = async () => {
       .update({ total_amount: newTotal })
       .eq("id", editingOrder.id)
 
-    // Remove deleted items and update changed items in local state
     setItems(prev => {
       const withoutDeleted = prev.filter(
         i => !deletedItems.find((d: any) => d.id === i.id)
@@ -216,53 +188,43 @@ const fetchData = async () => {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const startOfYesterday = new Date(startOfToday)
   startOfYesterday.setDate(startOfToday.getDate() - 1)
-
   const startOf7Days = new Date()
   startOf7Days.setDate(now.getDate() - 7)
 
   const filteredOrders = useMemo(() => {
-  return validOrders
-    .filter(o => {
-      const d = new Date(o.created_at)
-      if (filter === "Today") return d >= startOfToday
-      if (filter === "Yesterday") return d >= startOfYesterday && d < startOfToday
-      if (filter === "7d") return d >= startOf7Days
-      return true
-    })
-    .filter(o => orderType === "all" || o.order_type === orderType)
-    .filter(o => o.status !== "completed")
-    .filter(o =>
-      o.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
-      o.id.toLowerCase().includes(search.toLowerCase())
-    )
-}, [validOrders, filter, orderType, search])
+    return validOrders
+      .filter(o => {
+        const d = new Date(o.created_at)
+        if (filter === "Today") return d >= startOfToday
+        if (filter === "Yesterday") return d >= startOfYesterday && d < startOfToday
+        if (filter === "7d") return d >= startOf7Days
+        return true
+      })
+      .filter(o => orderType === "all" || o.order_type === orderType)
+      .filter(o => o.status !== "completed")
+      .filter(o =>
+        o.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
+        o.id.toLowerCase().includes(search.toLowerCase())
+      )
+  }, [validOrders, filter, orderType, search])
 
   const completedOrders = validOrders.filter(o => o.status === "completed")
-
-const revenue = completedOrders.reduce(
-  (sum, o) => sum + o.total_amount,
-  0
-)
+  const revenue = completedOrders.reduce((sum, o) => sum + o.total_amount, 0)
 
   if (loading) {
     return (
       <div className="p-6 text-center">
-  <div className="animate-pulse text-gray-400">Loading dashboard...</div>
-</div>
+        <div className="animate-pulse text-gray-400">Loading dashboard...</div>
+      </div>
     )
   }
 
   return (
     <div className="flex flex-col h-full pt-3 sm:pt-4">
+      <Topbar />
 
-  {/* ✅ ADD THIS LINE */}
-  <Topbar />
-
-  <div className="px-3 sm:px-6 pb-6 space-y-4">
-
-        <h1 className="text-xl sm:text-2xl md:text-3xl font-semibold">
-  Orders
-</h1>
+      <div className="px-3 sm:px-6 pb-6 space-y-4">
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-semibold">Orders</h1>
 
         {/* STATS */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -304,11 +266,7 @@ const revenue = completedOrders.reduce(
             ))}
 
             <button
-              onClick={() => {
-                setSearch("")
-                setFilter("all")
-                setOrderType("all")
-              }}
+              onClick={() => { setSearch(""); setFilter("all"); setOrderType("all") }}
               className="px-4 py-2 bg-red-500 text-white rounded-full whitespace-nowrap text-sm font-medium"
             >
               Clear
@@ -320,13 +278,11 @@ const revenue = completedOrders.reduce(
         {editingOrder && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
             <div className="bg-white rounded-2xl p-5 w-full max-w-sm space-y-4 shadow-xl">
-
               <p className="text-gray-800 font-semibold text-base">Edit Order</p>
 
               <div className="space-y-3 max-h-72 overflow-y-auto">
                 {editingOrder.editedItems.map((item: any, index: number) => (
                   <div key={item.id} className="flex items-center gap-2">
-
                     <input
                       value={item.product_name}
                       onChange={(e) => {
@@ -348,12 +304,8 @@ const revenue = completedOrders.reduce(
                           }
                         }}
                         className="w-7 h-7 rounded-full bg-red-500 text-white text-sm font-bold flex items-center justify-center hover:bg-red-600"
-                      >
-                        −
-                      </button>
-                      <span className="text-sm font-medium w-5 text-center">
-                        {item.quantity}
-                      </span>
+                      >−</button>
+                      <span className="text-sm font-medium w-5 text-center">{item.quantity}</span>
                       <button
                         onClick={() => {
                           const updated = [...editingOrder.editedItems]
@@ -361,9 +313,7 @@ const revenue = completedOrders.reduce(
                           setEditingOrder({ ...editingOrder, editedItems: updated })
                         }}
                         className="w-7 h-7 rounded-full bg-red-500 text-white text-sm font-bold flex items-center justify-center hover:bg-red-600"
-                      >
-                        +
-                      </button>
+                      >+</button>
                     </div>
 
                     <button
@@ -374,10 +324,7 @@ const revenue = completedOrders.reduce(
                         setEditingOrder({ ...editingOrder, editedItems: updated })
                       }}
                       className="w-7 h-7 rounded-full bg-gray-100 text-gray-400 text-sm flex items-center justify-center hover:bg-red-100 hover:text-red-500"
-                    >
-                      ✕
-                    </button>
-
+                    >✕</button>
                   </div>
                 ))}
               </div>
@@ -395,17 +342,12 @@ const revenue = completedOrders.reduce(
                 <button
                   onClick={() => setEditingOrder(null)}
                   className="border border-red-500 text-red-500 px-4 py-1.5 rounded-full text-xs sm:text-base font-medium hover:bg-red-50 transition-all"
-                >
-                  Cancel
-                </button>
+                >Cancel</button>
                 <button
                   onClick={saveEdit}
                   className="bg-red-500 text-white px-4 py-1.5 rounded-full text-xs sm:text-base font-medium hover:bg-red-600 transition-all"
-                >
-                  Save
-                </button>
+                >Save</button>
               </div>
-
             </div>
           </div>
         )}
@@ -428,42 +370,78 @@ const revenue = completedOrders.reduce(
                     <p className="text-gray-400 text-xs font-medium tracking-widest uppercase">
                       #{order.id.slice(0, 6)}
                     </p>
-                   <div>
-  <p className="text-gray-800 text-base font-semibold">
-    {order.customer_name}
-  </p>
-
-  <p className="text-xs text-gray-500">
-    {order.order_type === "dine_in" ? "Dine-in" : "Takeaway"}
-     {order.qr_codes?.name && ` - (${order.qr_codes.name})`}
-  </p>
-
-<p className="text-xs text-gray-400">
-  {new Date(order.created_at).toLocaleString()}
-</p>
-
-  {/* ✅ QR NAME */}
-  {order.qr_codes?.name && (
-    <p className="text-xs text-gray-400">
-    </p>
-  )}
-</div>
+                    <p className="text-gray-800 text-base font-semibold">{order.customer_name}</p>
+                    <p className="text-xs text-gray-500">
+                      {order.order_type === "dine_in" ? "Dine-in" : "Takeaway"}
+                      {order.qr_codes?.name && ` - (${order.qr_codes.name})`}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {new Date(order.created_at).toLocaleString()}
+                    </p>
                   </div>
                   <p className="text-gray-800 text-base font-semibold">₹{order.total_amount}</p>
                 </div>
 
-                {/* Line Items */}
-                <div className="px-5 py-3 border-b border-gray-100 space-y-1">
+                {/* ── Line Items with Addons ── */}
+                <div className="px-5 py-3 border-b border-gray-100 space-y-2">
                   {orderItems.map(item => (
-                    <div key={item.id} className="flex justify-between">
-                      <span className="text-gray-600 text-sm font-medium">
-                        {item.quantity}x {item.product_name}
-                      </span>
-                      <span className="text-gray-600 text-sm font-medium">
-                        ₹{item.price * item.quantity}
-                      </span>
+                    <div key={item.id}>
+                      {/* Main item row */}
+                      <div className="flex justify-between">
+                        <span className="text-gray-700 text-sm font-semibold">
+                          {item.quantity}x {item.product_name}
+                        </span>
+                        <span className="text-gray-700 text-sm font-semibold">
+                          ₹{item.price * item.quantity}
+                        </span>
+                      </div>
+
+                      {/* Addon details — rendered only when addons exist */}
+                      {Array.isArray(item.addons) && item.addons.length > 0 && (
+                        <div className="mt-1 ml-4 space-y-1">
+                          {item.addons.map((group: any, gi: number) => (
+                            group.items && group.items.length > 0 && (
+                              <div key={gi}>
+                                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                                  {group.group}:{" "}
+                                </span>
+                                <span className="inline-flex flex-wrap gap-1">
+                                  {group.items.map((addonItem: any, ai: number) => (
+                                    <span
+                                      key={ai}
+                                      className="inline-flex items-center gap-1 text-xs bg-red-50 text-red-600 border border-red-100 rounded-full px-2 py-0.5 font-medium"
+                                    >
+                                      {addonItem.name}
+                                      {addonItem.price > 0 && (
+                                        <span className="text-red-400">+₹{addonItem.price}</span>
+                                      )}
+                                    </span>
+                                  ))}
+                                </span>
+                              </div>
+                            )
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
+
+                  {/* ── Takeaway charges row ── */}
+                  {(() => {
+                    const foodTotal = orderItems.reduce((sum, i) => sum + i.price * i.quantity, 0)
+                    const takeawayCharge = order.total_amount - foodTotal
+                    if (order.order_type !== "takeaway" || takeawayCharge <= 0) return null
+                    return (
+                      <div className="flex justify-between items-center pt-1 border-t border-dashed border-gray-100">
+                        <span className="text-xs text-orange-500 font-semibold flex items-center gap-1">
+                          🛍 Takeaway charges
+                        </span>
+                        <span className="text-xs text-orange-500 font-semibold">
+                          +₹{takeawayCharge}
+                        </span>
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 {/* Action Buttons */}
@@ -471,67 +449,47 @@ const revenue = completedOrders.reduce(
                   <button
                     onClick={() => printBill(order.id)}
                     className="bg-red-500 text-white px-4 py-1.5 rounded-full text-xs sm:text-base font-medium hover:bg-red-600 transition-all"
-                  >
-                    Print
-                  </button>
+                  >Print</button>
                   <button
                     onClick={() => startEdit(order)}
                     className="bg-red-500 text-white px-4 py-1.5 rounded-full text-xs sm:text-base font-medium hover:bg-red-600 transition-all"
-                  >
-                    Edit
-                  </button>
+                  >Edit</button>
                   <button
                     onClick={() => updateStatus(order.id, "completed")}
                     className="bg-red-500 text-white px-4 py-1.5 rounded-full text-xs sm:text-base font-medium hover:bg-red-600 transition-all"
-                  >
-                    Complete
-                  </button>
-<button
-  onClick={() => deleteOrder(order.id)}
-  className="bg-red-500 text-white px-4 py-1.5 rounded-full text-xs sm:text-base font-medium hover:bg-red-600 transition-all"
->
-  Delete
-</button>
+                  >Complete</button>
+                  <button
+                    onClick={() => deleteOrder(order.id)}
+                    className="bg-red-500 text-white px-4 py-1.5 rounded-full text-xs sm:text-base font-medium hover:bg-red-600 transition-all"
+                  >Delete</button>
                 </div>
 
               </div>
             )
           })}
         </div>
-
-      </div>
-     {deleteOrderId && (
-  <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
-
-    <div className="bg-white rounded-[30px] p-10 w-[90%] max-w-md text-center space-y-8 transition-all duration-200 scale-100">
-
-      {/* TEXT */}
-      <h2 className="text-lg sm:text-xl font-medium leading-relaxed">
-        “Are you sure you want to delete this order?”
-      </h2>
-
-      {/* BUTTONS */}
-      <div className="flex justify-center gap-4">
-
-        <button
-          onClick={() => setDeleteOrderId(null)}
-          className="px-6 py-2 rounded-full bg-gray-200 text-gray-800 font-medium"
-        >
-          Cancel
-        </button>
-
-        <button
-          onClick={confirmDeleteOrder}
-          className="px-6 py-2 rounded-full bg-red-600 text-white font-medium"
-        >
-          Delete
-        </button>
-
       </div>
 
-    </div>
-  </div>
-)}
+      {/* Delete Confirm Modal */}
+      {deleteOrderId && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-[30px] p-10 w-[90%] max-w-md text-center space-y-8">
+            <h2 className="text-lg sm:text-xl font-medium leading-relaxed">
+              Are you sure you want to delete this order?
+            </h2>
+            <div className="flex justify-center gap-4">
+              <button
+                onClick={() => setDeleteOrderId(null)}
+                className="px-6 py-2 rounded-full bg-gray-200 text-gray-800 font-medium"
+              >Cancel</button>
+              <button
+                onClick={confirmDeleteOrder}
+                className="px-6 py-2 rounded-full bg-red-600 text-white font-medium"
+              >Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

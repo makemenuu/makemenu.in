@@ -18,11 +18,33 @@ type Product = {
   category_id: string
   is_available?: boolean
   image_url?: string
+  type?: string
 }
+
+type AddonItem = {
+  id: string
+  group_id: string
+  name: string
+  price: number
+}
+
+type AddonGroup = {
+  id: string
+  product_id: string
+  name: string
+  max_selections: number
+  is_required: boolean
+  items: AddonItem[]
+}
+
+type SelectedAddons = Record<string, string[]> // group_id → item_id[]
 
 type CartItem = {
   product: Product
   quantity: number
+  selectedAddons: SelectedAddons
+  addonGroups: AddonGroup[]
+  addonTotal: number
 }
 
 function getDistanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -151,6 +173,277 @@ function LocationDeniedScreen({ message }: { message: string }) {
   )
 }
 
+// ── Addon Selection Modal (Swiggy-style) ─────────────────────────────────────
+function AddonModal({
+  product,
+  groups,
+  onClose,
+  onConfirm,
+}: {
+  product: Product
+  groups: AddonGroup[]
+  onClose: () => void
+  onConfirm: (selected: SelectedAddons, addonTotal: number) => void
+}) {
+  const [selected, setSelected] = useState<SelectedAddons>({})
+  const [qty, setQty] = useState(1)
+
+  const toggleItem = (group: AddonGroup, itemId: string) => {
+    setSelected(prev => {
+      const current = prev[group.id] || []
+      if (current.includes(itemId)) {
+        // Deselect
+        return { ...prev, [group.id]: current.filter(id => id !== itemId) }
+      }
+      // Enforce max
+      if (current.length >= group.max_selections) {
+        if (group.max_selections === 1) {
+          // Replace single selection
+          return { ...prev, [group.id]: [itemId] }
+        }
+        return prev // at max, ignore
+      }
+      return { ...prev, [group.id]: [...current, itemId] }
+    })
+  }
+
+  const addonTotal = groups.reduce((sum, group) => {
+    const sel = selected[group.id] || []
+    return sum + sel.reduce((s, itemId) => {
+      const item = group.items.find(i => i.id === itemId)
+      return s + (item?.price || 0)
+    }, 0)
+  }, 0)
+
+  const itemTotal = (product.price + addonTotal) * qty
+
+  const canConfirm = groups
+    .filter(g => g.is_required)
+    .every(g => (selected[g.id] || []).length > 0)
+
+  // Prevent body scroll
+  useEffect(() => {
+    document.body.style.overflow = "hidden"
+    return () => { document.body.style.overflow = "" }
+  }, [])
+
+  return (
+    <>
+      <style>{`
+        @keyframes modalSlideUp {
+          from { transform: translateY(100%); opacity: 0; }
+          to   { transform: translateY(0);   opacity: 1; }
+        }
+        @keyframes overlayFadeIn {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+        .addon-item-row {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 12px 0; border-bottom: 1px solid #f0f0f0; cursor: pointer;
+          transition: background 0.1s;
+        }
+        .addon-item-row:last-child { border-bottom: none; }
+        .addon-radio {
+          width: 20px; height: 20px; border-radius: 50%;
+          border: 2px solid #d1d5db; display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0; transition: all 0.15s;
+        }
+        .addon-radio.selected { border-color: #E8192C; background: #E8192C; }
+        .addon-checkbox {
+          width: 20px; height: 20px; border-radius: 5px;
+          border: 2px solid #d1d5db; display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0; transition: all 0.15s;
+        }
+        .addon-checkbox.selected { border-color: #E8192C; background: #E8192C; }
+      `}</style>
+
+      {/* Overlay */}
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)",
+          zIndex: 500, animation: "overlayFadeIn 0.2s ease",
+        }}
+      />
+
+      {/* Modal */}
+      <div style={{
+        position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 510,
+        background: "#fff", borderRadius: "20px 20px 0 0",
+        maxHeight: "90vh", display: "flex", flexDirection: "column",
+        animation: "modalSlideUp 0.3s ease",
+        fontFamily: "'DM Sans', -apple-system, sans-serif",
+      }}>
+        {/* Drag handle */}
+        <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 0" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: "#e0e0e0" }} />
+        </div>
+
+        {/* Product header */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 14,
+          padding: "14px 20px 16px", borderBottom: "1px solid #f0f0f0",
+        }}>
+          <div style={{
+            width: 60, height: 60, borderRadius: 12, overflow: "hidden",
+            background: "#f5f5f5", flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28,
+          }}>
+            {product.image_url
+              ? <img src={product.image_url} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              : "🍽️"}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#111" }}>{product.name}</div>
+            <div style={{ fontSize: 14, color: "#E8192C", fontWeight: 700, marginTop: 2 }}>₹{product.price}</div>
+          </div>
+          <button onClick={onClose} style={{
+            width: 32, height: 32, borderRadius: "50%", background: "#f3f4f6",
+            border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 18, color: "#555", flexShrink: 0,
+          }}>×</button>
+        </div>
+
+        {/* Scrollable groups */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 20px" }}>
+          {groups.map(group => (
+            <div key={group.id} style={{ paddingTop: 20, paddingBottom: 4 }}>
+              {/* Group label */}
+              <div style={{ marginBottom: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: "#111" }}>{group.name}</span>
+                  {group.is_required && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, background: "#FFF1F2",
+                      color: "#E8192C", border: "1px solid #FECDD3",
+                      borderRadius: 20, padding: "2px 8px", letterSpacing: 0.3,
+                    }}>REQUIRED</span>
+                  )}
+                </div>
+                <div style={{ fontSize: 12, color: "#aaa", marginTop: 2 }}>
+                  {group.max_selections === 1
+                    ? "Select 1"
+                    : `Select up to ${group.max_selections}`}
+                  {(selected[group.id] || []).length > 0 && (
+                    <span style={{ color: "#E8192C", fontWeight: 700 }}>
+                      {" "}· {(selected[group.id] || []).length} selected
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Items */}
+              <div style={{ background: "#fff", border: "1px solid #f0f0f0", borderRadius: 14, overflow: "hidden" }}>
+                {group.items.map(item => {
+                  const isSel = (selected[group.id] || []).includes(item.id)
+                  const isRadio = group.max_selections === 1
+                  return (
+                    <div
+                      key={item.id}
+                      className="addon-item-row"
+                      style={{ padding: "13px 16px" }}
+                      onClick={() => toggleItem(group, item.id)}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div className={isRadio ? `addon-radio ${isSel ? "selected" : ""}` : `addon-checkbox ${isSel ? "selected" : ""}`}>
+                          {isSel && (
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                              <path d={isRadio ? "M5 5m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" : "M1.5 5l2.5 2.5 4.5-4.5"} stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill={isRadio ? "#fff" : "none"} />
+                            </svg>
+                          )}
+                        </div>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: "#222" }}>{item.name}</span>
+                      </div>
+                      <span style={{
+                        fontSize: 13, fontWeight: 700,
+                        color: item.price > 0 ? "#E8192C" : "#22c55e",
+                      }}>
+                        {item.price > 0 ? `+₹${item.price}` : "Free"}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+          <div style={{ height: 16 }} />
+        </div>
+
+        {/* Footer: qty + add button */}
+        <div style={{
+          padding: "16px 20px 28px",
+          borderTop: "1px solid #f0f0f0",
+          background: "#fff",
+        }}>
+          {/* Required group warning */}
+          {!canConfirm && (
+            <div style={{ fontSize: 12, color: "#E8192C", fontWeight: 600, marginBottom: 10, textAlign: "center" }}>
+              Please select from all required groups
+            </div>
+          )}
+
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            {/* Qty stepper */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: 10,
+              border: "1.5px solid #e5e7eb", borderRadius: 50,
+              padding: "8px 14px", flexShrink: 0,
+            }}>
+              <button
+                onClick={() => setQty(q => Math.max(1, q - 1))}
+                style={{
+                  width: 24, height: 24, borderRadius: "50%",
+                  border: "1.5px solid #d1d5db", background: "#fff",
+                  cursor: "pointer", fontSize: 16, fontWeight: 700,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  lineHeight: 1, color: "#333",
+                }}
+              >−</button>
+              <span style={{ fontSize: 15, fontWeight: 800, minWidth: 16, textAlign: "center" }}>{qty}</span>
+              <button
+                onClick={() => setQty(q => q + 1)}
+                style={{
+                  width: 24, height: 24, borderRadius: "50%",
+                  border: "1.5px solid #E8192C", background: "#E8192C",
+                  cursor: "pointer", fontSize: 16, fontWeight: 700,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  lineHeight: 1, color: "#fff",
+                }}
+              >+</button>
+            </div>
+
+            {/* Add item button */}
+            <button
+              disabled={!canConfirm}
+              onClick={() => onConfirm(selected, addonTotal)}
+              style={{
+                flex: 1, background: canConfirm ? "#E8192C" : "#e5e7eb",
+                color: canConfirm ? "#fff" : "#aaa",
+                border: "none", borderRadius: 50,
+                padding: "13px 20px", fontSize: 14, fontWeight: 800,
+                cursor: canConfirm ? "pointer" : "not-allowed",
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                fontFamily: "'DM Sans', sans-serif",
+                transition: "background 0.15s",
+              }}
+            >
+              <span>Add Item</span>
+              <span>₹{itemTotal}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ── Cart key: unique per product+addons combo ─────────────────────────────────
+function cartKey(productId: string, selected: SelectedAddons): string {
+  const sorted = Object.keys(selected).sort().map(k => `${k}:${[...(selected[k] || [])].sort().join(",")}`).join("|")
+  return `${productId}__${sorted}`
+}
+
 export default function MenuPage() {
   const params = useParams()
   const slug = String(params.slug)
@@ -167,6 +460,7 @@ export default function MenuPage() {
   const [restaurantLocation, setRestaurantLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [categories, setCategories]             = useState<Category[]>([])
   const [products, setProducts]                 = useState<Product[]>([])
+  const [allAddonGroups, setAllAddonGroups]     = useState<AddonGroup[]>([])
   const [cart, setCart]                         = useState<CartItem[]>([])
   const [customerName, setCustomerName]         = useState("")
   const [orderType, setOrderType]               = useState<"dine_in" | "takeaway" | "">("")
@@ -175,9 +469,10 @@ export default function MenuPage() {
   const [activeCategory, setActiveCategory]     = useState<string>("all")
   const [searchQuery, setSearchQuery]           = useState("")
   const [cartOpen, setCartOpen]                 = useState(false)
-  const [expandedDesc, setExpandedDesc] = useState<Record<string, boolean>>({})
-  const toggleDesc = (id: string) =>setExpandedDesc(prev => ({ ...prev, [id]: !prev[id] }))
+  const [expandedDesc, setExpandedDesc]         = useState<Record<string, boolean>>({})
+  const [addonModal, setAddonModal]             = useState<{ product: Product; groups: AddonGroup[] } | null>(null)
 
+  const toggleDesc = (id: string) => setExpandedDesc(prev => ({ ...prev, [id]: !prev[id] }))
   const catScrollRef = useRef<HTMLDivElement>(null)
   const greeting = getGreeting()
 
@@ -195,11 +490,13 @@ export default function MenuPage() {
         { data: receiptSettings, error: receiptError },
         { data: catData },
         { data: prodData },
+        { data: addonGroupData },
       ] = await Promise.all([
         supabase.from("restaurant_settings").select("latitude, longitude, open_time, close_time").eq("user_id", userId).maybeSingle(),
         supabase.from("receipt_settings").select("restaurant_name").eq("user_id", userId).maybeSingle(),
         supabase.from("categories").select("*").eq("user_id", userId),
         supabase.from("products").select("*").eq("user_id", userId),
+        supabase.from("addon_groups").select("*, addon_items(*)").eq("user_id", userId).order("created_at", { ascending: true }),
       ])
 
       if (receiptError) console.error("[MenuPage] receipt_settings error:", receiptError.message)
@@ -221,6 +518,9 @@ export default function MenuPage() {
 
       setCategories(catData || [])
       setProducts(prodData || [])
+      setAllAddonGroups(
+        (addonGroupData || []).map((g: any) => ({ ...g, items: g.addon_items || [] }))
+      )
       setLoading(false)
     }
     fetchMenu()
@@ -238,37 +538,67 @@ export default function MenuPage() {
     )
   }, [restaurantLocation])
 
-  const addToCart = (product: Product) => {
+  // ── When "Add" is tapped on a product ──────────────────────────────────────
+  const handleAddTap = (product: Product) => {
+    const groups = allAddonGroups.filter(g => g.product_id === product.id)
+    if (groups.length === 0) {
+      // No addons — add directly
+      addDirectToCart(product)
+    } else {
+      setAddonModal({ product, groups })
+    }
+  }
+
+  const addDirectToCart = (product: Product) => {
     setCart(prev => {
-      const existing = prev.find(i => i.product.id === product.id)
-      if (existing) return prev.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i)
-      return [...prev, { product, quantity: 1 }]
+      const key = cartKey(product.id, {})
+      const existing = prev.find(i => cartKey(i.product.id, i.selectedAddons) === key)
+      if (existing) return prev.map(i => cartKey(i.product.id, i.selectedAddons) === key ? { ...i, quantity: i.quantity + 1 } : i)
+      return [...prev, { product, quantity: 1, selectedAddons: {}, addonGroups: [], addonTotal: 0 }]
     })
   }
 
-  const removeFromCart = (productId: string) => {
+  const handleAddonConfirm = (selected: SelectedAddons, addonTotal: number) => {
+    if (!addonModal) return
+    const { product, groups } = addonModal
+    const key = cartKey(product.id, selected)
+    setCart(prev => {
+      const existing = prev.find(i => cartKey(i.product.id, i.selectedAddons) === key)
+      if (existing) return prev.map(i => cartKey(i.product.id, i.selectedAddons) === key ? { ...i, quantity: i.quantity + 1 } : i)
+      return [...prev, { product, quantity: 1, selectedAddons: selected, addonGroups: groups, addonTotal }]
+    })
+    setAddonModal(null)
+  }
+
+  const removeFromCart = (key: string) => {
     setCart(prev =>
-      prev.map(i => i.product.id === productId ? { ...i, quantity: i.quantity - 1 } : i).filter(i => i.quantity > 0)
+      prev.map(i => cartKey(i.product.id, i.selectedAddons) === key ? { ...i, quantity: i.quantity - 1 } : i)
+        .filter(i => i.quantity > 0)
     )
   }
 
-  const getQty = (productId: string) => cart.find(i => i.product.id === productId)?.quantity || 0
+  const addToCartByKey = (item: CartItem) => {
+    const key = cartKey(item.product.id, item.selectedAddons)
+    setCart(prev => prev.map(i => cartKey(i.product.id, i.selectedAddons) === key ? { ...i, quantity: i.quantity + 1 } : i))
+  }
+
+  const getQty = (productId: string) => {
+    return cart.filter(i => i.product.id === productId).reduce((sum, i) => sum + i.quantity, 0)
+  }
+
   const isValidName = (name: string) => /^[A-Za-z\s]{3,}$/.test(name.trim())
   const scrollCats = (dir: "left" | "right") => {
     catScrollRef.current?.scrollBy({ left: dir === "left" ? -200 : 200, behavior: "smooth" })
   }
 
-  // ── Totals with takeaway charge ─────────────────────────────────
-  const totalItems = cart.reduce((sum, i) => sum + i.quantity, 0)
-  const totalFood  = cart.reduce((sum, i) => sum + i.product.price * i.quantity, 0)
-
+  const totalItems  = cart.reduce((sum, i) => sum + i.quantity, 0)
+  const totalFood   = cart.reduce((sum, i) => sum + (i.product.price + i.addonTotal) * i.quantity, 0)
   const totalTakeaway = orderType === "takeaway"
     ? cart.reduce((sum, i) => {
         const cat = categories.find(c => c.id === i.product.category_id)
         return sum + (cat?.takeaway_charge ?? 0) * i.quantity
       }, 0)
     : 0
-
   const totalAmount = totalFood + totalTakeaway
 
   const placeOrder = async () => {
@@ -291,7 +621,18 @@ export default function MenuPage() {
       const { error: itemError } = await supabase.from("order_items").insert(
         cart.map(i => ({
           order_id: order.id, product_id: i.product.id,
-          product_name: i.product.name, price: i.product.price, quantity: i.quantity,
+          product_name: i.product.name,
+          price: i.product.price + i.addonTotal,
+          quantity: i.quantity,
+          addons: Object.keys(i.selectedAddons).length > 0
+            ? i.addonGroups.map(g => ({
+                group: g.name,
+                items: (i.selectedAddons[g.id] || [])
+                  .map(itemId => g.items.find(it => it.id === itemId))
+                  .filter(Boolean)
+                  .map(it => ({ name: it!.name, price: it!.price })),
+              }))
+            : null,
         }))
       )
       if (itemError) throw new Error(itemError.message)
@@ -358,9 +699,13 @@ export default function MenuPage() {
           background: var(--red); color: #fff; border: none;
           border-radius: 50px; padding: 7px 16px; font-size: 13px;
           font-weight: 700; cursor: pointer; font-family: var(--font);
-          transition: background 0.15s;
+          transition: background 0.15s; white-space: nowrap;
         }
         .add-btn:hover { background: var(--red-dark); }
+        .customise-tag {
+          font-size: 10px; color: var(--muted); text-align: right;
+          margin-top: 2px; font-weight: 600; letter-spacing: 0.2px;
+        }
         .qty-minus {
           width: 30px; height: 30px; border-radius: 50%;
           border: 1.5px solid var(--border); background: #fff;
@@ -533,16 +878,9 @@ export default function MenuPage() {
             {filteredProducts.map(p => {
               const qty = getQty(p.id)
               const available = p.is_available !== false
+              const hasAddons = allAddonGroups.some(g => g.product_id === p.id)
               return (
-                <div
-                      key={p.id}
-                      className="prod-card"
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        height: "100%",
-                      }}
-                    >
+                <div key={p.id} className="prod-card" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
                   {p.image_url ? (
                     <img src={p.image_url} alt={p.name} style={{ width: "100%", height: 130, objectFit: "cover", display: "block" }} />
                   ) : (
@@ -552,67 +890,53 @@ export default function MenuPage() {
                       display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40,
                     }}>🍽️</div>
                   )}
-                  <div
-  style={{
-    padding: "12px",
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-  }}
->
+                  <div style={{ padding: "12px", display: "flex", flexDirection: "column", flex: 1 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 2 }}>{p.name}</div>
                     {p.description && (
-  <div style={{ marginBottom: 8 }}>
-    <div
-      style={{
-        fontSize: 12,
-        color: "var(--muted)",
-        lineHeight: 1.4,
-        wordBreak: "break-word",
-        overflow: "hidden",
-        display: "-webkit-box",
-        WebkitLineClamp: expandedDesc[p.id] ? 999 : 2,
-        WebkitBoxOrient: "vertical",
-      }}
-    >
-      {p.description}
-    </div>
-    {p.description.length > 60 && (
-      <button
-        onClick={e => { e.stopPropagation(); toggleDesc(p.id) }}
-        style={{
-          background: "none", border: "none", padding: 0,
-          fontSize: 11, fontWeight: 700, color: "var(--red)",
-          cursor: "pointer", fontFamily: "var(--font)", marginTop: 2,
-        }}
-      >
-        {expandedDesc[p.id] ? "less ▲" : "more ▼"}
-      </button>
-    )}
-  </div>
-)}
+                      <div style={{ marginBottom: 8 }}>
+                        <div style={{
+                          fontSize: 12, color: "var(--muted)", lineHeight: 1.4,
+                          wordBreak: "break-word", overflow: "hidden",
+                          display: "-webkit-box",
+                          WebkitLineClamp: expandedDesc[p.id] ? 999 : 2,
+                          WebkitBoxOrient: "vertical",
+                        }}>
+                          {p.description}
+                        </div>
+                        {p.description.length > 60 && (
+                          <button
+                            onClick={e => { e.stopPropagation(); toggleDesc(p.id) }}
+                            style={{
+                              background: "none", border: "none", padding: 0,
+                              fontSize: 11, fontWeight: 700, color: "var(--red)",
+                              cursor: "pointer", fontFamily: "var(--font)", marginTop: 2,
+                            }}
+                          >
+                            {expandedDesc[p.id] ? "less ▲" : "more ▼"}
+                          </button>
+                        )}
+                      </div>
+                    )}
                     {!available && (
                       <div style={{ fontSize: 11, fontWeight: 700, color: "var(--red)", marginBottom: 6 }}>Out of stock</div>
                     )}
-                    <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            marginTop: "auto",
-                          }}
-                        >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto" }}>
                       <div style={{ fontSize: 14, fontWeight: 700 }}>₹{p.price}</div>
                       {!available ? (
                         <button disabled style={{ background: "#ddd", color: "#999", border: "none", borderRadius: 50, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "not-allowed" }}>Out</button>
-                      ) : qty > 0 ? (
+                      ) : qty > 0 && !hasAddons ? (
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <button className="qty-minus" onClick={() => removeFromCart(p.id)}>−</button>
+                          <button className="qty-minus" onClick={() => removeFromCart(cartKey(p.id, {}))}>−</button>
                           <span style={{ fontSize: 14, fontWeight: 700, minWidth: 16, textAlign: "center" }}>{qty}</span>
-                          <button className="qty-plus" onClick={() => addToCart(p)}>+</button>
+                          <button className="qty-plus" onClick={() => addDirectToCart(p)}>+</button>
                         </div>
                       ) : (
-                        <button className="add-btn" onClick={() => addToCart(p)}>Add</button>
+                        <div>
+                          <button className="add-btn" onClick={() => handleAddTap(p)}>
+                            {qty > 0 ? `${qty} added` : "Add"}
+                          </button>
+                          {hasAddons && <div className="customise-tag">Customisable</div>}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -632,14 +956,14 @@ export default function MenuPage() {
             cart={cart} customerName={customerName} setCustomerName={setCustomerName}
             orderType={orderType} setOrderType={setOrderType}
             totalFood={totalFood} totalTakeaway={totalTakeaway} totalAmount={totalAmount} totalItems={totalItems}
-            addToCart={addToCart} removeFromCart={removeFromCart}
+            addToCartByKey={addToCartByKey} removeFromCart={removeFromCart}
             placingOrder={placingOrder} placeOrder={placeOrder}
           />
         </div>
       </div>
 
-{totalItems > 0 && !cartOpen && (
-  <button className="cart-fab" onClick={() => setCartOpen(true)}>
+      {totalItems > 0 && !cartOpen && (
+        <button className="cart-fab" onClick={() => setCartOpen(true)}>
           <span>🛍</span>
           <span>{totalItems} {totalItems === 1 ? "item" : "items"} · ₹{totalAmount}</span>
           <span style={{ marginLeft: 4 }}>›</span>
@@ -660,11 +984,21 @@ export default function MenuPage() {
           cart={cart} customerName={customerName} setCustomerName={setCustomerName}
           orderType={orderType} setOrderType={setOrderType}
           totalFood={totalFood} totalTakeaway={totalTakeaway} totalAmount={totalAmount} totalItems={totalItems}
-          addToCart={addToCart} removeFromCart={removeFromCart}
+          addToCartByKey={addToCartByKey} removeFromCart={removeFromCart}
           placingOrder={placingOrder} placeOrder={placeOrder}
           hideTitle
         />
       </div>
+
+      {/* Addon Modal */}
+      {addonModal && (
+        <AddonModal
+          product={addonModal.product}
+          groups={addonModal.groups}
+          onClose={() => setAddonModal(null)}
+          onConfirm={handleAddonConfirm}
+        />
+      )}
 
       {orderSuccess && <div className="toast">🎉 Order placed successfully!</div>}
     </>
@@ -674,7 +1008,7 @@ export default function MenuPage() {
 function OrderPanel({
   cart, customerName, setCustomerName, orderType, setOrderType,
   totalFood, totalTakeaway, totalAmount, totalItems,
-  addToCart, removeFromCart, placingOrder, placeOrder, hideTitle,
+  addToCartByKey, removeFromCart, placingOrder, placeOrder, hideTitle,
 }: {
   cart: CartItem[]
   customerName: string
@@ -685,8 +1019,8 @@ function OrderPanel({
   totalTakeaway: number
   totalAmount: number
   totalItems: number
-  addToCart: (p: Product) => void
-  removeFromCart: (id: string) => void
+  addToCartByKey: (item: CartItem) => void
+  removeFromCart: (key: string) => void
   placingOrder: boolean
   placeOrder: () => void
   hideTitle?: boolean
@@ -708,38 +1042,62 @@ function OrderPanel({
           <div style={{ fontSize: 13, color: "var(--muted)", textAlign: "center", padding: "16px 0" }}>
             Your cart is empty
           </div>
-        ) : cart.map(item => (
-          <div key={item.product.id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-            <div style={{
-              width: 42, height: 42, borderRadius: 10, overflow: "hidden",
-              background: "#f0f0f0", flexShrink: 0,
-              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22,
-            }}>
-              {item.product.image_url
-                ? <img src={item.product.image_url} alt={item.product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                : "🍽️"}
+        ) : cart.map(item => {
+          const key = cartKey(item.product.id, item.selectedAddons)
+          const addonLabels = item.addonGroups.flatMap(g =>
+            (item.selectedAddons[g.id] || []).map(iid => g.items.find(it => it.id === iid)?.name).filter(Boolean)
+          )
+          return (
+            <div key={key} style={{ marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{
+                  width: 42, height: 42, borderRadius: 10, overflow: "hidden",
+                  background: "#f0f0f0", flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22,
+                }}>
+                  {item.product.image_url
+                    ? <img src={item.product.image_url} alt={item.product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    : "🍽️"}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>{item.product.name}</div>
+                  <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                    ₹{item.product.price + item.addonTotal}
+                    {item.addonTotal > 0 && (
+                      <span style={{ color: "#E8192C", fontSize: 11 }}> (+₹{item.addonTotal} addons)</span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <button onClick={() => removeFromCart(key)} style={{
+                    width: 26, height: 26, borderRadius: "50%",
+                    border: "1.5px solid var(--border)", background: "#fff",
+                    fontSize: 16, fontWeight: 700, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>−</button>
+                  <span style={{ fontSize: 13, fontWeight: 700 }}>{item.quantity}</span>
+                  <button onClick={() => addToCartByKey(item)} style={{
+                    width: 26, height: 26, borderRadius: "50%",
+                    border: "1.5px solid var(--red)", background: "var(--red)", color: "#fff",
+                    fontSize: 16, fontWeight: 700, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>+</button>
+                </div>
+              </div>
+              {/* Addon tags */}
+              {addonLabels.length > 0 && (
+                <div style={{ marginTop: 5, marginLeft: 52, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  {addonLabels.map((label, i) => (
+                    <span key={i} style={{
+                      fontSize: 10, fontWeight: 600, background: "#f3f4f6",
+                      color: "#555", borderRadius: 20, padding: "2px 8px",
+                    }}>{label}</span>
+                  ))}
+                </div>
+              )}
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{item.product.name}</div>
-              <div style={{ fontSize: 12, color: "var(--muted)" }}>₹{item.product.price}</div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <button onClick={() => removeFromCart(item.product.id)} style={{
-                width: 26, height: 26, borderRadius: "50%",
-                border: "1.5px solid var(--border)", background: "#fff",
-                fontSize: 16, fontWeight: 700, cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>−</button>
-              <span style={{ fontSize: 13, fontWeight: 700 }}>{item.quantity}</span>
-              <button onClick={() => addToCart(item.product)} style={{
-                width: 26, height: 26, borderRadius: "50%",
-                border: "1.5px solid var(--red)", background: "var(--red)", color: "#fff",
-                fontSize: 16, fontWeight: 700, cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>+</button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       <input
@@ -756,7 +1114,6 @@ function OrderPanel({
         <button className={`ot-btn ${orderType === "takeaway" ? "active" : ""}`} onClick={() => setOrderType("takeaway")}>Take away</button>
       </div>
 
-      {/* ── Totals breakdown ── */}
       <div style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#888", marginBottom: 6 }}>
           <span>Subtotal</span>

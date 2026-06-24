@@ -16,6 +16,22 @@ type Product = {
   is_available?: boolean
 }
 
+type AddonItem = {
+  id: string
+  group_id: string
+  name: string
+  price: number
+}
+
+type AddonGroup = {
+  id: string
+  product_id: string
+  name: string
+  max_selections: number
+  is_required: boolean
+  items: AddonItem[]
+}
+
 const ITEMS_DESKTOP = 6
 const ITEMS_TABLET  = 4
 const ITEMS_MOBILE  = 2
@@ -153,15 +169,14 @@ function CategoryPager({
                 )}
               </div>
             )}
-              <div className="flex justify-center gap-2 mt-1">
-      <button onClick={() => onEdit(c)}>
-        <img src="/icons/edit.png" className="w-4 h-4" />
-      </button>
-
-      <button onClick={() => onDelete(c.id)}>
-        <img src="/icons/delete.png" className="w-4 h-4" />
-      </button>
-</div>
+            <div className="flex justify-center gap-2 mt-1">
+              <button onClick={() => onEdit(c)}>
+                <img src="/icons/edit.png" className="w-4 h-4" />
+              </button>
+              <button onClick={() => onDelete(c.id)}>
+                <img src="/icons/delete.png" className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         ))}
         {Array.from({ length: itemsPerPage - visibleCategories.length }).map((_, i) => (
@@ -177,9 +192,315 @@ function CategoryPager({
   )
 }
 
+// ── Addon Manager ─────────────────────────────────────────────────────────────
+function AddonManager({ product, userId }: { product: Product; userId: string }) {
+  const [groups, setGroups]           = useState<AddonGroup[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [expanded, setExpanded]       = useState(false)
+  const [addingGroup, setAddingGroup] = useState(false)
+  const [newGroupName, setNewGroupName]   = useState("")
+  const [newGroupMax, setNewGroupMax]     = useState("1")
+  const [newGroupReq, setNewGroupReq]     = useState(false)
+  // per-group new-item state
+  const [newItemName, setNewItemName]     = useState<Record<string, string>>({})
+  const [newItemPrice, setNewItemPrice]   = useState<Record<string, string>>({})
+  // per-group edit state
+  const [editGroupId, setEditGroupId]   = useState<string | null>(null)
+  const [editGroupName, setEditGroupName] = useState("")
+  const [editGroupMax, setEditGroupMax]   = useState("1")
+  const [editGroupReq, setEditGroupReq]   = useState(false)
+
+  const fetchGroups = async () => {
+    const { data: gData } = await supabase
+      .from("addon_groups")
+      .select("*, addon_items(*)")
+      .eq("product_id", product.id)
+      .order("created_at", { ascending: true })
+    setGroups((gData || []).map(g => ({ ...g, items: g.addon_items || [] })))
+    setLoading(false)
+  }
+
+  useEffect(() => { fetchGroups() }, [product.id])
+
+  const createGroup = async () => {
+    if (!newGroupName.trim()) return
+    await supabase.from("addon_groups").insert({
+      user_id: userId,
+      product_id: product.id,
+      name: newGroupName.trim(),
+      max_selections: Number(newGroupMax) || 1,
+      is_required: newGroupReq,
+    })
+    setNewGroupName(""); setNewGroupMax("1"); setNewGroupReq(false); setAddingGroup(false)
+    fetchGroups()
+  }
+
+  const updateGroup = async (id: string) => {
+    await supabase.from("addon_groups").update({
+      name: editGroupName,
+      max_selections: Number(editGroupMax) || 1,
+      is_required: editGroupReq,
+    }).eq("id", id)
+    setEditGroupId(null)
+    fetchGroups()
+  }
+
+  const deleteGroup = async (id: string) => {
+    if (!confirm("Delete this addon group and all its items?")) return
+    await supabase.from("addon_items").delete().eq("group_id", id)
+    await supabase.from("addon_groups").delete().eq("id", id)
+    fetchGroups()
+  }
+
+  const addItem = async (groupId: string) => {
+    const name  = (newItemName[groupId] || "").trim()
+    const price = Number(newItemPrice[groupId] || 0)
+    if (!name) return
+    await supabase.from("addon_items").insert({ group_id: groupId, name, price })
+    setNewItemName(p  => ({ ...p, [groupId]: "" }))
+    setNewItemPrice(p => ({ ...p, [groupId]: "" }))
+    fetchGroups()
+  }
+
+  const deleteItem = async (itemId: string) => {
+    await supabase.from("addon_items").delete().eq("id", itemId)
+    fetchGroups()
+  }
+
+  const totalGroups = groups.length
+
+  return (
+    <div style={{
+      borderTop: "1px dashed #e5e7eb",
+      marginTop: 8,
+      paddingTop: 8,
+    }}>
+      {/* Toggle button */}
+      <button
+        onClick={() => setExpanded(e => !e)}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+          background: expanded ? "#FFF1F2" : "#f9fafb",
+          border: "1px solid",
+          borderColor: expanded ? "#fecdd3" : "#e5e7eb",
+          borderRadius: 8, padding: "7px 12px",
+          cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+          fontSize: 12, fontWeight: 700, color: expanded ? "#E8192C" : "#555",
+          transition: "all 0.15s",
+        }}
+      >
+        <span>
+          🧩 Addons
+          {totalGroups > 0 && (
+            <span style={{
+              marginLeft: 6, background: "#EF233C", color: "#fff",
+              borderRadius: 20, padding: "1px 7px", fontSize: 10, fontWeight: 800,
+            }}>{totalGroups}</span>
+          )}
+        </span>
+        <span style={{ fontSize: 14 }}>{expanded ? "▲" : "▼"}</span>
+      </button>
+
+      {expanded && (
+        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+          {loading ? (
+            <div style={{ fontSize: 12, color: "#aaa", textAlign: "center", padding: "8px 0" }}>Loading...</div>
+          ) : groups.length === 0 && !addingGroup ? (
+            <div style={{ fontSize: 12, color: "#aaa", textAlign: "center", padding: "8px 0" }}>
+              No addon groups yet
+            </div>
+          ) : null}
+
+          {/* Existing groups */}
+          {groups.map(group => (
+            <div key={group.id} style={{
+              border: "1px solid #e5e7eb", borderRadius: 10,
+              overflow: "hidden", background: "#fafafa",
+            }}>
+              {/* Group header */}
+              <div style={{
+                background: "#f3f4f6", padding: "8px 12px",
+                display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+              }}>
+                {editGroupId === group.id ? (
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                    <input
+                      value={editGroupName}
+                      onChange={e => setEditGroupName(e.target.value)}
+                      style={{ border: "1px solid #d1d5db", borderRadius: 6, padding: "4px 8px", fontSize: 12, width: "100%" }}
+                      placeholder="Group name"
+                      autoFocus
+                    />
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <label style={{ fontSize: 11, color: "#666" }}>Max select:</label>
+                      <input
+                        type="number" min="1" value={editGroupMax}
+                        onChange={e => setEditGroupMax(e.target.value)}
+                        style={{ border: "1px solid #d1d5db", borderRadius: 6, padding: "4px 8px", fontSize: 12, width: 52 }}
+                      />
+                      <label style={{ fontSize: 11, color: "#666", display: "flex", alignItems: "center", gap: 4 }}>
+                        <input type="checkbox" checked={editGroupReq} onChange={e => setEditGroupReq(e.target.checked)} />
+                        Required
+                      </label>
+                      <button
+                        onClick={() => updateGroup(group.id)}
+                        style={{ marginLeft: "auto", background: "#EF233C", color: "#fff", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                      >Save</button>
+                      <button
+                        onClick={() => setEditGroupId(null)}
+                        style={{ background: "#e5e7eb", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer" }}
+                      >✕</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#111" }}>{group.name}</div>
+                      <div style={{ fontSize: 10, color: "#888", marginTop: 1 }}>
+                        Select up to {group.max_selections} · {group.is_required ? "Required" : "Optional"}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button
+                        onClick={() => {
+                          setEditGroupId(group.id)
+                          setEditGroupName(group.name)
+                          setEditGroupMax(String(group.max_selections))
+                          setEditGroupReq(group.is_required)
+                        }}
+                        style={{ background: "none", border: "none", cursor: "pointer", padding: 2 }}
+                      >
+                        <img src="/icons/edit.png" style={{ width: 14, height: 14 }} />
+                      </button>
+                      <button onClick={() => deleteGroup(group.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 2 }}>
+                        <img src="/icons/delete.png" style={{ width: 14, height: 14 }} />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Items list */}
+              <div style={{ padding: "8px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+                {group.items.map(item => (
+                  <div key={item.id} style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8,
+                    padding: "6px 10px",
+                  }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#222" }}>{item.name}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 12, color: "#EF233C", fontWeight: 700 }}>
+                        {item.price > 0 ? `+₹${item.price}` : "Free"}
+                      </span>
+                      <button onClick={() => deleteItem(item.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}>
+                        <img src="/icons/delete.png" style={{ width: 12, height: 12 }} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Add item row */}
+                <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                  <input
+                    value={newItemName[group.id] || ""}
+                    onChange={e => setNewItemName(p => ({ ...p, [group.id]: e.target.value }))}
+                    onKeyDown={e => e.key === "Enter" && addItem(group.id)}
+                    placeholder="Item name"
+                    style={{
+                      flex: 1, border: "1px dashed #d1d5db", borderRadius: 7,
+                      padding: "5px 8px", fontSize: 12, outline: "none",
+                    }}
+                  />
+                  <div style={{ position: "relative", width: 72 }}>
+                    <span style={{ position: "absolute", left: 7, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#888" }}>₹</span>
+                    <input
+                      type="number" min="0"
+                      value={newItemPrice[group.id] || ""}
+                      onChange={e => setNewItemPrice(p => ({ ...p, [group.id]: e.target.value }))}
+                      onKeyDown={e => e.key === "Enter" && addItem(group.id)}
+                      placeholder="0"
+                      style={{
+                        width: "100%", border: "1px dashed #d1d5db", borderRadius: 7,
+                        padding: "5px 6px 5px 18px", fontSize: 12, outline: "none",
+                      }}
+                    />
+                  </div>
+                  <button
+                    onClick={() => addItem(group.id)}
+                    style={{
+                      background: "#EF233C", color: "#fff", border: "none",
+                      borderRadius: 7, padding: "5px 10px", fontSize: 11,
+                      fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                    }}
+                  >+ Add</button>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* New group form */}
+          {addingGroup && (
+            <div style={{
+              border: "1.5px dashed #EF233C", borderRadius: 10,
+              padding: "12px", background: "#fff8f8",
+              display: "flex", flexDirection: "column", gap: 8,
+            }}>
+              <input
+                value={newGroupName}
+                onChange={e => setNewGroupName(e.target.value)}
+                placeholder="Group name (e.g. Starters, Beverages)"
+                style={{ border: "1px solid #fca5a5", borderRadius: 7, padding: "7px 10px", fontSize: 12, outline: "none", width: "100%" }}
+                autoFocus
+              />
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <label style={{ fontSize: 11, color: "#666", whiteSpace: "nowrap" }}>Max selections:</label>
+                  <input
+                    type="number" min="1" value={newGroupMax}
+                    onChange={e => setNewGroupMax(e.target.value)}
+                    style={{ border: "1px solid #fca5a5", borderRadius: 7, padding: "5px 8px", fontSize: 12, width: 52, outline: "none" }}
+                  />
+                </div>
+                <label style={{ fontSize: 11, color: "#666", display: "flex", alignItems: "center", gap: 4 }}>
+                  <input type="checkbox" checked={newGroupReq} onChange={e => setNewGroupReq(e.target.checked)} />
+                  Required
+                </label>
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  onClick={createGroup}
+                  style={{ flex: 1, background: "#EF233C", color: "#fff", border: "none", borderRadius: 8, padding: "8px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                >Create Group</button>
+                <button
+                  onClick={() => { setAddingGroup(false); setNewGroupName(""); setNewGroupMax("1"); setNewGroupReq(false) }}
+                  style={{ background: "#e5e7eb", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, cursor: "pointer" }}
+                >Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {!addingGroup && (
+            <button
+              onClick={() => setAddingGroup(true)}
+              style={{
+                width: "100%", border: "1.5px dashed #EF233C", borderRadius: 8,
+                background: "none", color: "#EF233C", fontSize: 12, fontWeight: 700,
+                padding: "8px", cursor: "pointer",
+              }}
+            >+ Add Addon Group</button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function ProductsPage() {
   const [categories, setCategories]                       = useState<Category[]>([])
   const [products, setProducts]                           = useState<Product[]>([])
+  const [userId, setUserId]                               = useState<string>("")
   const [categoryName, setCategoryName]                   = useState("")
   const [takeawayCharge, setTakeawayCharge]               = useState("")
   const [productName, setProductName]                     = useState("")
@@ -203,6 +524,7 @@ export default function ProductsPage() {
     const { data: sessionData } = await supabase.auth.getSession()
     const user = sessionData.session?.user
     if (!user) return
+    setUserId(user.id)
     const { data: catData }  = await supabase.from("categories").select("*").eq("user_id", user.id)
     const { data: prodData } = await supabase.from("products").select("*").eq("user_id", user.id)
     const safeProducts = (prodData || []).map(p => ({
@@ -337,19 +659,16 @@ export default function ProductsPage() {
             className="w-full border px-3 py-2 rounded-full"
           />
           <div className="relative">
-  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500">
-  ₹
-  </span>
-
-  <input
-    type="text"
-    inputMode="numeric"
-    value={takeawayCharge}
-    onChange={(e) => setTakeawayCharge(e.target.value)}
-    placeholder="Takeaway charge (₹/item)"
-    className="w-full border rounded-full pl-10 pr-4 py-2"
-  />
-</div>
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500">₹</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={takeawayCharge}
+              onChange={(e) => setTakeawayCharge(e.target.value)}
+              placeholder="Takeaway charge (₹/item)"
+              className="w-full border rounded-full pl-10 pr-4 py-2"
+            />
+          </div>
           <button onClick={addCategory} className="bg-red-500 text-white px-4 py-2 rounded-full">
             Add category
           </button>
@@ -443,14 +762,11 @@ export default function ProductsPage() {
             <div>
               <h4 className="font-semibold">{p.name}</h4>
               <p
-  className="text-sm text-gray-500 break-words line-clamp-2"
-  style={{
-    overflowWrap: "break-word",
-    wordBreak: "break-word"
-  }}
->
-  {p.description}
-</p>
+                className="text-sm text-gray-500 break-words line-clamp-2"
+                style={{ overflowWrap: "break-word", wordBreak: "break-word" }}
+              >
+                {p.description}
+              </p>
               <div className="flex justify-between items-center mt-1">
                 ₹{p.price}
                 <div className="flex gap-2">
@@ -463,6 +779,9 @@ export default function ProductsPage() {
                 </div>
               </div>
             </div>
+
+            {/* ── Addon Manager ── */}
+            {userId && <AddonManager product={p} userId={userId} />}
           </div>
         ))}
       </div>
