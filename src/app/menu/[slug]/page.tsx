@@ -534,7 +534,7 @@ export default function MenuPage() {
 
   const handleCookingConfirm = (cookingNote: string, qty: number) => {
     if (!cookingModal) return
-    addToCart(cookingModal,{},{},0,cookingNote,qty)
+  addToCart(cookingModal, {}, [], 0, cookingNote, qty)
     setCookingModal(null)
   }
 
